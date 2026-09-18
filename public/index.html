@@ -2529,10 +2529,18 @@
     }
 
     
-    // Web Speech API Voice Reader for News
+    // Ultra-Realistic 100% Pure Native Bengali Audio Reader (অনলাইন স্পষ্ট খাঁটি বাংলা অডিও)
     let isSpeaking = false;
+    let bengaliAudioQueue = [];
+    let currentAudioElem = null;
 
     function stopSpeaking() {
+      if (currentAudioElem) {
+        currentAudioElem.pause();
+        currentAudioElem.currentTime = 0;
+        currentAudioElem = null;
+      }
+      bengaliAudioQueue = [];
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -2543,50 +2551,106 @@
       if (text) text.innerText = 'খবরটি শুনুন';
     }
 
-    function toggleSpeech() {
-      if (!('speechSynthesis' in window)) {
-        alert('আপনার ব্রাউজার বা ডিভাইসে ভয়েস রিডার সাপোর্ট করে না।');
+    // Split text into natural breath sentences for flawless streaming playback
+    function chunkBengaliText(text) {
+      if (!text) return [];
+      // Clean non-printable
+      const clean = text.replace(/\s+/g, ' ').trim();
+      const rawSentences = clean.split(/[।!?\n]+/);
+      const chunks = [];
+      let currentChunk = '';
+
+      rawSentences.forEach(s => {
+        const sentence = s.trim();
+        if (!sentence) return;
+        if ((currentChunk + ' ' + sentence).length < 180) {
+          currentChunk = currentChunk ? (currentChunk + '। ' + sentence) : sentence;
+        } else {
+          if (currentChunk) chunks.push(currentChunk);
+          currentChunk = sentence;
+        }
+      });
+      if (currentChunk) chunks.push(currentChunk);
+      return chunks;
+    }
+
+    function playNextBengaliChunk() {
+      if (!isSpeaking || bengaliAudioQueue.length === 0) {
+        stopSpeaking();
         return;
       }
 
+      const chunkText = bengaliAudioQueue.shift();
+      // Google TTS Engine endpoint specifically engineered for pure Bengali (bn)
+      const ttsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&q=' + encodeURIComponent(chunkText) + '&tl=bn&total=1&idx=0&client=tw-ob';
+
+      const audio = new Audio();
+      currentAudioElem = audio;
+      audio.crossOrigin = 'anonymous';
+      audio.src = ttsUrl;
+
+      audio.onended = function() {
+        playNextBengaliChunk();
+      };
+
+      audio.onerror = function() {
+        // Fallback to device speech engine if online audio hits network block
+        playFallbackDeviceSpeech(chunkText, function() {
+          playNextBengaliChunk();
+        });
+      };
+
+      audio.play().catch(function() {
+        playFallbackDeviceSpeech(chunkText, function() {
+          playNextBengaliChunk();
+        });
+      });
+    }
+
+    function playFallbackDeviceSpeech(text, onComplete) {
+      if (!('speechSynthesis' in window)) {
+        if (onComplete) onComplete();
+        return;
+      }
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'bn-BD';
+      utter.rate = 0.95;
+
+      const voices = window.speechSynthesis.getVoices();
+      const bnVoice = voices.find(v => (v.lang && (v.lang.toLowerCase().includes('bn') || v.lang.toLowerCase().includes('ben'))));
+      if (bnVoice) utter.voice = bnVoice;
+
+      utter.onend = function() {
+        if (onComplete) onComplete();
+      };
+      utter.onerror = function() {
+        if (onComplete) onComplete();
+      };
+      window.speechSynthesis.speak(utter);
+    }
+
+    function toggleSpeech() {
       if (isSpeaking) {
         stopSpeaking();
         return;
       }
 
-      // Collect text to read aloud
       const title = document.getElementById('modalArticleTitle').innerText;
-      const paras = Array.from(document.querySelectorAll('#modalArticleParagraphs p')).map(p => p.innerText).join('. ');
-      const fullTextToRead = title + '. ' + paras;
+      const paras = Array.from(document.querySelectorAll('#modalArticleParagraphs p')).map(p => p.innerText).join('। ');
+      const fullText = (title + '। ' + paras).trim();
 
-      if (!fullTextToRead || fullTextToRead.trim().length === 0) return;
+      if (!fullText) return;
 
-      const utterance = new SpeechSynthesisUtterance(fullTextToRead);
-      utterance.lang = 'bn-BD'; // Bengali
-      utterance.rate = 0.95;    // Pleasant reading speed
+      bengaliAudioQueue = chunkBengaliText(fullText);
+      if (bengaliAudioQueue.length === 0) return;
 
-      // Try finding Bengali voice if present
-      const voices = window.speechSynthesis.getVoices();
-      const bnVoice = voices.find(v => v.lang.includes('bn') || v.lang.includes('BD') || v.lang.includes('IN'));
-      if (bnVoice) utterance.voice = bnVoice;
+      isSpeaking = true;
+      const btn = document.getElementById('ttsSpeakBtn');
+      const text = document.getElementById('ttsBtnText');
+      if (btn) btn.classList.add('speaking');
+      if (text) text.innerText = 'থামান';
 
-      utterance.onstart = function() {
-        isSpeaking = true;
-        const btn = document.getElementById('ttsSpeakBtn');
-        const text = document.getElementById('ttsBtnText');
-        if (btn) btn.classList.add('speaking');
-        if (text) text.innerText = 'থামান';
-      };
-
-      utterance.onend = function() {
-        stopSpeaking();
-      };
-
-      utterance.onerror = function() {
-        stopSpeaking();
-      };
-
-      window.speechSynthesis.speak(utterance);
+      playNextBengaliChunk();
     }
 
     function closeModal() {
