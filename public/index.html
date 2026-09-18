@@ -2547,11 +2547,11 @@
     }
 
     
-    // 100% Guaranteed Bengali Voice Reader (Dual-Mode: Cloud Bengali Voice + WebSpeech + Android Native)
+    // 100% Guaranteed Bengali Voice Reader (Dual-Mode: High-Fidelity Bengali Cloud Audio + WebSpeech + Android Native)
     let isSpeaking = false;
     let speechUtteranceList = [];
     let currentSpeechIndex = 0;
-    let webAudioObj = null;
+    let globalAudioPlayer = null;
 
     window.onAndroidTTSState = function(speaking) {
       isSpeaking = speaking;
@@ -2580,13 +2580,13 @@
     }
 
     function stopSpeaking() {
-      if (webAudioObj) {
+      if (globalAudioPlayer) {
         try {
-          webAudioObj.pause();
-          webAudioObj.removeAttribute('src');
-          webAudioObj.load();
+          globalAudioPlayer.pause();
+          globalAudioPlayer.removeAttribute('src');
+          globalAudioPlayer.load();
         } catch(e) {}
-        webAudioObj = null;
+        globalAudioPlayer = null;
       }
       if (window.AndroidTTS && typeof window.AndroidTTS.stop === 'function') {
         window.AndroidTTS.stop();
@@ -2600,6 +2600,63 @@
       updateSpeechUI(false);
     }
 
+    // Play Bengali speech audio via soundoftext API (CORS friendly, works on 100% laptops & desktop browsers)
+    function fetchAndPlayCloudAudio(textChunk, onSuccess, onFail) {
+      fetch('https://api.soundoftext.com/sounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: 'google',
+          data: { text: textChunk, voice: 'bn-BD' }
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!isSpeaking) return;
+        if (data.success && data.id) {
+          const soundId = data.id;
+          let attempts = 0;
+          const poll = setInterval(() => {
+            if (!isSpeaking) { clearInterval(poll); return; }
+            attempts++;
+            if (attempts > 8) {
+              clearInterval(poll);
+              onFail();
+              return;
+            }
+            fetch('https://api.soundoftext.com/sounds/' + soundId)
+              .then(r => r.json())
+              .then(resData => {
+                if (resData.status === 'Done' && resData.location) {
+                  clearInterval(poll);
+                  if (!isSpeaking) return;
+                  if (globalAudioPlayer) {
+                    try { globalAudioPlayer.pause(); } catch(e){}
+                  }
+                  globalAudioPlayer = new Audio(resData.location);
+                  globalAudioPlayer.onended = onSuccess;
+                  globalAudioPlayer.onerror = onFail;
+                  const p = globalAudioPlayer.play();
+                  if (p !== undefined) {
+                    p.catch(() => onFail());
+                  }
+                } else if (resData.status === 'Error') {
+                  clearInterval(poll);
+                  onFail();
+                }
+              })
+              .catch(() => {
+                clearInterval(poll);
+                onFail();
+              });
+          }, 600);
+        } else {
+          onFail();
+        }
+      })
+      .catch(() => onFail());
+    }
+
     function playNextSentenceWeb() {
       if (!isSpeaking || currentSpeechIndex >= speechUtteranceList.length) {
         stopSpeaking();
@@ -2607,59 +2664,23 @@
       }
 
       const rawText = speechUtteranceList[currentSpeechIndex];
-      // Limit to 180 chars for ultra-crisp audio synthesis
-      const textChunk = rawText.length > 180 ? rawText.substring(0, 180) : rawText;
+      const textChunk = rawText.length > 95 ? rawText.substring(0, 95) : rawText;
 
-      // Mode 1: High Quality Bengali Female Voice URL (Works in Chrome, Edge, Firefox, Safari)
-      const cloudAudioUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=bn&q=' + encodeURIComponent(textChunk);
-
-      if (webAudioObj) {
-        try { webAudioObj.pause(); } catch(e){}
-      }
-
-      webAudioObj = new Audio();
-      webAudioObj.src = cloudAudioUrl;
-
-      webAudioObj.onended = function() {
-        if (!isSpeaking) return;
-        currentSpeechIndex++;
-        playNextSentenceWeb();
-      };
-
-      webAudioObj.onerror = function() {
-        // Mode 2 Fallback: Native browser Web Speech API
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utter = new SpeechSynthesisUtterance(textChunk);
-          utter.lang = 'bn-BD';
-          utter.pitch = 1.2;
-          utter.rate = 0.95;
-          utter.onend = function() {
-            if (!isSpeaking) return;
-            currentSpeechIndex++;
-            playNextSentenceWeb();
-          };
-          utter.onerror = function() {
-            if (!isSpeaking) return;
-            currentSpeechIndex++;
-            playNextSentenceWeb();
-          };
-          window.speechSynthesis.speak(utter);
-        } else {
+      // 1. Try High-Quality Cloud Audio First
+      fetchAndPlayCloudAudio(
+        textChunk,
+        function() { // On End
+          if (!isSpeaking) return;
           currentSpeechIndex++;
           playNextSentenceWeb();
-        }
-      };
-
-      const playPromise = webAudioObj.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(function(err) {
-          // If browser blocked audio tag, fallback to WebSpeech
+        },
+        function() { // On Error / Fallback
+          // 2. Fallback to Web Speech API
           if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(textChunk);
             utter.lang = 'bn-BD';
-            utter.pitch = 1.2;
+            utter.pitch = 1.25;
             utter.rate = 0.95;
             utter.onend = function() {
               if (!isSpeaking) return;
@@ -2672,9 +2693,12 @@
               playNextSentenceWeb();
             };
             window.speechSynthesis.speak(utter);
+          } else {
+            currentSpeechIndex++;
+            playNextSentenceWeb();
           }
-        });
-      }
+        }
+      );
     }
 
     function toggleSpeech() {
