@@ -189,7 +189,8 @@ def get_news(
         pass
 
     if category and category != 'all':
-        news = [it for it in news if it['category'] == category]
+        news = [it for it in news if is_clean_headline(it['title']) and it['category'] == category]
+    news = [it for it in news if is_clean_headline(it['title'])]
     if source and source != 'all':
         news = [it for it in news if it['source_id'] == source]
 
