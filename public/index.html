@@ -1157,7 +1157,7 @@
       </div>
 
       <div class="header-actions">
-        <a href="/static/NewsBangla.apk" download="NewsBangla.apk" class="download-apk-btn" title="অ্যান্ড্রয়েড অ্যাপ ডাউনলোড করুন">
+        <a href="/NewsBangla.apk" download="NewsBangla.apk" class="download-apk-btn" id="apkDownloadBtn" onclick="handleApkDownload(event)" title="অ্যান্ড্রয়েড অ্যাপ ডাউনলোড করুন">
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
           </svg>
@@ -1986,7 +1986,25 @@
       });
     }
 
-    async function openArticleModal(item) {
+    async 
+    function handleApkDownload(e) {
+      // Direct reliable download handler
+      const possibleUrls = [
+        '/NewsBangla.apk',
+        '/static/NewsBangla.apk',
+        'https://github.com/uzzalhossain100-cyber/news360-app/raw/main/public/NewsBangla.apk'
+      ];
+      // If running on Vercel or locally, try direct location first
+      const link = document.createElement('a');
+      link.href = '/NewsBangla.apk';
+      link.download = 'NewsBangla.apk';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function openArticleModal(item) {
       const modal = document.getElementById('newsModal');
       const modalLoading = document.getElementById('modalLoading');
       const modalContent = document.getElementById('modalContent');
