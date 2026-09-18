@@ -113,6 +113,81 @@ def get_news(
     except Exception:
         pass
 
+        # 3. Channel 24 via RSS
+    try:
+        req = urllib.request.Request("https://news.google.com/rss/search?q=site:channel24bd.tv&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=3) as r:
+            soup = BeautifulSoup(r.read(), 'xml')
+            for it in soup.find_all('item')[:15]:
+                raw_t = it.find('title').text
+                t = re.sub(r'\s*-\s*(Channel 24|News).*$', '', raw_t, flags=re.I).strip()
+                l = it.find('link').text
+                if len(t) > 20 and not t.startswith('Channel 24'):
+                    news.append({
+                        "id": l,
+                        "title": t,
+                        "link": l,
+                        "timestamp": time.time(),
+                        "category": detect_cat(t, l),
+                        "source_id": "channel24",
+                        "source_name": "চ্যানেল ২৪",
+                        "source_badge": "Channel 24",
+                        "source_color": "#0284c7",
+                        "image": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&auto=format&fit=crop&q=80"
+                    })
+    except Exception:
+        pass
+
+    # 4. NTV via RSS
+    try:
+        req = urllib.request.Request("https://news.google.com/rss/search?q=site:ntvbd.com&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=3) as r:
+            soup = BeautifulSoup(r.read(), 'xml')
+            for it in soup.find_all('item')[:15]:
+                raw_t = it.find('title').text
+                t = re.sub(r'\s*-\s*(NTV|NTV Online).*$', '', raw_t, flags=re.I).strip()
+                l = it.find('link').text
+                if len(t) > 20 and not t.startswith('NTV'):
+                    news.append({
+                        "id": l,
+                        "title": t,
+                        "link": l,
+                        "timestamp": time.time(),
+                        "category": detect_cat(t, l),
+                        "source_id": "ntv",
+                        "source_name": "এনটিভি",
+                        "source_badge": "NTV",
+                        "source_color": "#16a34a",
+                        "image": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&auto=format&fit=crop&q=80"
+                    })
+    except Exception:
+        pass
+
+    # 5. RTV via RSS
+    try:
+        req = urllib.request.Request("https://news.google.com/rss/search?q=site:rtvonline.com&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=3) as r:
+            soup = BeautifulSoup(r.read(), 'xml')
+            for it in soup.find_all('item')[:15]:
+                raw_t = it.find('title').text
+                t = re.sub(r'\s*-\s*(RTV|Rtvonline).*$', '', raw_t, flags=re.I).strip()
+                l = it.find('link').text
+                if len(t) > 20 and not t.startswith('RTV'):
+                    news.append({
+                        "id": l,
+                        "title": t,
+                        "link": l,
+                        "timestamp": time.time(),
+                        "category": detect_cat(t, l),
+                        "source_id": "rtv",
+                        "source_name": "আরটিভি",
+                        "source_badge": "RTV",
+                        "source_color": "#ea580c",
+                        "image": "https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=600&auto=format&fit=crop&q=80"
+                    })
+    except Exception:
+        pass
+
     if category and category != 'all':
         news = [it for it in news if it['category'] == category]
     if source and source != 'all':
