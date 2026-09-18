@@ -2665,7 +2665,7 @@
                   }
                   globalAudioPlayer = new Audio(resData.location);
                   // Faster, professional newscaster pace (1.1x)
-                  globalAudioPlayer.playbackRate = 1.12;
+                  globalAudioPlayer.playbackRate = 1.25;
                   globalAudioPlayer.onended = onSuccess;
                   globalAudioPlayer.onerror = onFail;
                   const p = globalAudioPlayer.play();
@@ -2712,7 +2712,7 @@
             const utter = new SpeechSynthesisUtterance(textChunk);
             utter.lang = 'bn-BD';
             utter.pitch = 1.25;
-            utter.rate = 1.10; // Prompt, natural brisk speed
+            utter.rate = 1.25; // Prompt, natural brisk speed
             utter.onend = function() {
               if (!isSpeaking) return;
               currentSpeechIndex++;
