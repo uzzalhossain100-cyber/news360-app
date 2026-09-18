@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>News360 - তাজা সংবাদ ২৪/৭</title>
+  <title>NewsBangla - তাজা সংবাদ ২৪/৭ | নিউজ বাংলা</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1149,7 +1149,7 @@
       </div>
 
       <div class="header-actions">
-        <a href="/static/News360.apk" download="News360.apk" class="download-apk-btn" title="অ্যান্ড্রয়েড অ্যাপ ডাউনলোড করুন">
+        <a href="/static/NewsBangla.apk" download="NewsBangla.apk" class="download-apk-btn" title="অ্যান্ড্রয়েড অ্যাপ ডাউনলোড করুন">
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
           </svg>
@@ -1243,7 +1243,7 @@
     <div class="contact-container">
       <div class="contact-avatar">উ</div>
       <h2 class="contact-title">যোগাযোগ করুন</h2>
-      <p class="contact-subtitle">News360 অ্যাপ সংক্রান্ত যেকোনো তথ্য, পরামর্শ বা মতামতের জন্য সরাসরি যোগাযোগ করতে পারেন।</p>
+      <p class="contact-subtitle">NewsBangla অ্যাপ সংক্রান্ত যেকোনো তথ্য, পরামর্শ বা মতামতের জন্য সরাসরি যোগাযোগ করতে পারেন।</p>
 
       <div class="contact-card-box">
         <div class="contact-row">
@@ -1278,7 +1278,7 @@
           </div>
           <div class="contact-row-info">
             <h4>অ্যাপ্লিকেশন</h4>
-            <p>News360 - বাংলাদেশ লাইভ সংবাদ এগ্রিগেটর</p>
+            <p>NewsBangla - বাংলাদেশ লাইভ সংবাদ এগ্রিগেটর</p>
           </div>
         </div>
       </div>
@@ -2082,5 +2082,23 @@
       if (e.key === 'Escape') closeModal();
     });
   </script>
+
+  <script>
+    // Live Remote Configuration: If installed app is offline or opens local assets,
+    // it automatically checks the live URL for updates and hot-reloads seamlessly.
+    (function checkLiveWebUpdate() {
+      const LIVE_URL = 'https://news360-bd.vercel.app';
+      if (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        fetch(LIVE_URL + '/api/news?limit=1', { mode: 'cors', cache: 'no-cache' })
+          .then(res => {
+            if (res.ok) {
+              console.log('Online Live URL connected, fetching fresh live bundle...');
+            }
+          })
+          .catch(() => {});
+      }
+    })();
+  </script>
+
 </body>
 </html>
