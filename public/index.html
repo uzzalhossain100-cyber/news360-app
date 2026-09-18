@@ -2547,7 +2547,7 @@
     }
 
     
-    // 100% Guaranteed Bengali Voice Reader (Continuous Dari-to-Dari flow, minimal pause, fast 1.25x tempo)
+    // 100% Authentic Bangladeshi TV News Anchor Style (Fast 1.40x tempo, seamless natural flow, instantaneous Dari transitions)
     let isSpeaking = false;
     let speechUtteranceList = [];
     let currentSpeechIndex = 0;
@@ -2600,14 +2600,55 @@
       updateSpeechUI(false);
     }
 
-    // Split strictly ONLY at Dari (।) or question/exclamation (? !), reading complete thoughts continuously without middle pauses
-    function breakIntoDariSentences(text) {
-      if (!text) return [];
-      return text.split(/[।!?\n]+/).map(s => s.trim()).filter(Boolean);
+    // High quality Cloud Voice stream with preloading next sentence for ZERO gap
+    let nextAudioPreload = null;
+
+    function preloadNextAudio(index) {
+      if (index >= speechUtteranceList.length) return;
+      const nextText = speechUtteranceList[index];
+      fetch('https://api.soundoftext.com/sounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ engine: 'google', data: { text: nextText, voice: 'bn-BD' } })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.id) {
+          setTimeout(() => {
+            fetch('https://api.soundoftext.com/sounds/' + d.id)
+              .then(res => res.json())
+              .then(rd => {
+                if (rd.status === 'Done' && rd.location) {
+                  nextAudioPreload = new Audio(rd.location);
+                  nextAudioPreload.playbackRate = 1.40;
+                  nextAudioPreload.preload = 'auto';
+                }
+              }).catch(()=>{});
+          }, 300);
+        }
+      }).catch(()=>{});
     }
 
-    // High quality Cloud Voice stream
     function fetchAndPlayCloudAudio(textChunk, onSuccess, onFail) {
+      // If next audio is already preloaded, use it immediately with zero lag!
+      if (nextAudioPreload) {
+        if (globalAudioPlayer) {
+          try { globalAudioPlayer.pause(); } catch(e){}
+        }
+        globalAudioPlayer = nextAudioPreload;
+        nextAudioPreload = null;
+        globalAudioPlayer.playbackRate = 1.40; // 1.40x Authentic Bangladeshi TV News Anchor Tempo
+        globalAudioPlayer.onended = onSuccess;
+        globalAudioPlayer.onerror = onFail;
+        const p = globalAudioPlayer.play();
+        if (p !== undefined) {
+          p.catch(() => onFail());
+        }
+        // Preload next upcoming item
+        preloadNextAudio(currentSpeechIndex + 1);
+        return;
+      }
+
       fetch('https://api.soundoftext.com/sounds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2640,16 +2681,16 @@
                     try { globalAudioPlayer.pause(); } catch(e){}
                   }
                   globalAudioPlayer = new Audio(resData.location);
-                  globalAudioPlayer.playbackRate = 1.25;
-                  globalAudioPlayer.onended = () => {
-                    // Minimal microscopic pause (only 90ms) before next line
-                    setTimeout(onSuccess, 90);
-                  };
+                  // 1.40x Fast, energetic, authoritative Bangladeshi TV News Pace
+                  globalAudioPlayer.playbackRate = 1.40;
+                  globalAudioPlayer.onended = onSuccess;
                   globalAudioPlayer.onerror = onFail;
                   const p = globalAudioPlayer.play();
                   if (p !== undefined) {
                     p.catch(() => onFail());
                   }
+                  // Start prefetching next sentence
+                  preloadNextAudio(currentSpeechIndex + 1);
                 } else if (resData.status === 'Error') {
                   clearInterval(poll);
                   onFail();
@@ -2659,7 +2700,7 @@
                 clearInterval(poll);
                 onFail();
               });
-          }, 350);
+          }, 250);
         } else {
           onFail();
         }
@@ -2675,27 +2716,24 @@
 
       const textChunk = speechUtteranceList[currentSpeechIndex];
 
-      // 1. Try High-Quality Cloud Audio First
       fetchAndPlayCloudAudio(
         textChunk,
-        function() { // On End
+        function() { // On End: immediate instant transition to next sentence
           if (!isSpeaking) return;
           currentSpeechIndex++;
           playNextSentenceWeb();
         },
-        function() { // On Error / Fallback
-          // 2. Fallback to Web Speech API
+        function() { // On Fallback Web Speech API
           if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(textChunk);
             utter.lang = 'bn-BD';
-            utter.pitch = 1.25;
-            utter.rate = 1.25; // Brisk tempo
+            utter.pitch = 1.20;
+            utter.rate = 1.38; // Fast 1.38x
             utter.onend = function() {
               if (!isSpeaking) return;
               currentSpeechIndex++;
-              // Minimal pause before next sentence
-              setTimeout(playNextSentenceWeb, 80);
+              playNextSentenceWeb();
             };
             utter.onerror = function() {
               if (!isSpeaking) return;
@@ -2729,7 +2767,8 @@
       rawParas.forEach(p => {
         const cleanP = sanitizeTextForSpeech(p);
         if (!cleanP) return;
-        const sentences = breakIntoDariSentences(cleanP);
+        // Group full complete sentences till Dari (।) without any intermediate commas or splits
+        const sentences = cleanP.split(/[।!?\n]+/).map(s => s.trim()).filter(Boolean);
         fullSentences.push(...sentences);
       });
 
@@ -2747,6 +2786,7 @@
       // Laptop / Desktop Browser Web Queue
       speechUtteranceList = fullSentences;
       currentSpeechIndex = 0;
+      nextAudioPreload = null;
       playNextSentenceWeb();
     }
 
