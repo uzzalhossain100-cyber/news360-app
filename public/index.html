@@ -2629,55 +2629,38 @@
       }
 
       const textToSpeak = speechUtteranceList[currentSpeechIndex];
-      const audioUrl = 'https://newsbangla.vercel.app/api/tts?text=' + encodeURIComponent(textToSpeak);
 
-      // Play via sweet female neural voice API
-      if (webAudioPlayer) {
-        try { webAudioPlayer.pause(); } catch(e){}
-      }
-      webAudioPlayer = new Audio(audioUrl);
-      webAudioPlayer.onended = function() {
-        if (!isSpeaking) return;
-        currentSpeechIndex++;
-        playNextSentenceWeb();
-      };
-      webAudioPlayer.onerror = function() {
-        // Fallback to Web Speech API if API stream has any glitch
-        if ('speechSynthesis' in window) {
-          const utter = new SpeechSynthesisUtterance(textToSpeak);
-          utter.lang = 'bn-BD';
-          utter.pitch = 1.15; // Higher sweet female pitch
-          utter.rate = 0.95;
-          if (availableBengaliFemaleVoice) utter.voice = availableBengaliFemaleVoice;
-          utter.onend = function() {
-            currentSpeechIndex++;
-            playNextSentenceWeb();
-          };
-          utter.onerror = function() {
-            currentSpeechIndex++;
-            playNextSentenceWeb();
-          };
-          window.speechSynthesis.speak(utter);
-        } else {
+      // DIRECT, ROBUST BROWSER SPEECH SYNTHESIS (Zero network lag, 100% desktop & laptop reliable)
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(textToSpeak);
+        utter.lang = 'bn-BD';
+        
+        // Pitch 1.25 gives a sweet, pleasant female tonality in all standard synthesizers
+        utter.pitch = 1.25;
+        utter.rate = 0.92;
+
+        if (!availableBengaliFemaleVoice) initVoices();
+        if (availableBengaliFemaleVoice) {
+          utter.voice = availableBengaliFemaleVoice;
+        }
+
+        utter.onend = function() {
+          if (!isSpeaking) return;
           currentSpeechIndex++;
           playNextSentenceWeb();
-        }
-      };
+        };
 
-      webAudioPlayer.play().catch(function() {
-        if ('speechSynthesis' in window) {
-          const utter = new SpeechSynthesisUtterance(textToSpeak);
-          utter.lang = 'bn-BD';
-          utter.pitch = 1.15;
-          utter.rate = 0.95;
-          if (availableBengaliFemaleVoice) utter.voice = availableBengaliFemaleVoice;
-          utter.onend = function() {
-            currentSpeechIndex++;
-            playNextSentenceWeb();
-          };
-          window.speechSynthesis.speak(utter);
-        }
-      });
+        utter.onerror = function() {
+          if (!isSpeaking) return;
+          currentSpeechIndex++;
+          playNextSentenceWeb();
+        };
+
+        window.speechSynthesis.speak(utter);
+      } else {
+        stopSpeaking();
+      }
     }
 
     function toggleSpeech() {
