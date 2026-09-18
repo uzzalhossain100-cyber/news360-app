@@ -1,2 +1,3 @@
 fastapi
 beautifulsoup4
+edge-tts

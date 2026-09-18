@@ -2547,13 +2547,14 @@
     }
 
     
-    // 100% Reliable Bengali Voice Reader (Dual Engine: Android Native Bridge & WebSpeech fallback)
+    // 100% Reliable Bengali Voice Reader (Sweet Female Voice - Nabanita Neural + Full Article)
     let isSpeaking = false;
     let speechUtteranceList = [];
     let currentSpeechIndex = 0;
-    let availableBengaliVoice = null;
+    let availableBengaliFemaleVoice = null;
+    let webAudioPlayer = null;
 
-    // Callback called from Android native TextToSpeech engine
+    // Callback called from Android native engine
     window.onAndroidTTSState = function(speaking) {
       isSpeaking = speaking;
       const btn = document.getElementById('ttsSpeakBtn');
@@ -2563,7 +2564,7 @@
         else btn.classList.remove('speaking');
       }
       if (text) {
-        text.innerText = speaking ? 'থামান' : 'খবরটি শুনুন';
+        text.innerText = speaking ? 'থামান' : 'সম্পূর্ণ খবর শুনুন';
       }
     };
 
@@ -2576,9 +2577,11 @@
         const v = voices[i];
         const lang = (v.lang || '').toLowerCase();
         const name = (v.name || '').toLowerCase();
+        // Prefer Bengali female voices (Nabanita / Tanishaa / Female)
         if (lang.startsWith('bn') || name.includes('bengali') || name.includes('bangla')) {
-          availableBengaliVoice = v;
-          break;
+          if (!availableBengaliFemaleVoice || name.includes('female') || name.includes('nabanita') || name.includes('tanishaa')) {
+            availableBengaliFemaleVoice = v;
+          }
         }
       }
     }
@@ -2597,71 +2600,16 @@
       return clean.trim();
     }
 
-        let webAudioPlayer = null;
-    function playCloudTtsAudio(textToSpeak) {
-      if (!textToSpeak) {
-        stopSpeaking();
-        return;
-      }
+    function stopSpeaking() {
       if (webAudioPlayer) {
-        webAudioPlayer.pause();
+        try { webAudioPlayer.pause(); } catch(e){}
         webAudioPlayer = null;
       }
-      
-      const snippet = textToSpeak.length > 95 ? textToSpeak.substring(0, 95) : textToSpeak;
-      fetch('https://api.soundoftext.com/sounds', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: 'google',
-          data: { text: snippet, voice: 'bn-BD' }
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.id) {
-          setTimeout(() => {
-            fetch('https://api.soundoftext.com/sounds/' + data.id)
-              .then(r => r.json())
-              .then(resData => {
-                if (resData.location) {
-                  webAudioPlayer = new Audio(resData.location);
-                  webAudioPlayer.onended = () => stopSpeaking();
-                  webAudioPlayer.onerror = () => stopSpeaking();
-                  webAudioPlayer.play().catch(e => {
-                    console.log('Audio autoplay prevented:', e);
-                  });
-                } else {
-                  stopSpeaking();
-                }
-              })
-              .catch(() => stopSpeaking());
-          }, 800);
-        } else {
-          stopSpeaking();
-        }
-      })
-      .catch(() => {
-        // Fallback to basic speechSynthesis
-        if ('speechSynthesis' in window) {
-          const utter = new SpeechSynthesisUtterance(snippet);
-          utter.lang = 'bn-BD';
-          utter.onend = () => stopSpeaking();
-          utter.onerror = () => stopSpeaking();
-          window.speechSynthesis.speak(utter);
-        } else {
-          stopSpeaking();
-        }
-      });
-    }
-
-    function stopSpeaking() {
-      if (webAudioPlayer) { webAudioPlayer.pause(); webAudioPlayer = null; }
-      // 1. If running inside Android App with native TTS
+      // 1. Android App Bridge
       if (window.AndroidTTS && typeof window.AndroidTTS.stop === 'function') {
         window.AndroidTTS.stop();
       }
-      // 2. If running on Web browser
+      // 2. Web browser SpeechSynthesis
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -2671,39 +2619,65 @@
       const btn = document.getElementById('ttsSpeakBtn');
       const text = document.getElementById('ttsBtnText');
       if (btn) btn.classList.remove('speaking');
-      if (text) text.innerText = 'খবরটি শুনুন';
+      if (text) text.innerText = 'সম্পূর্ণ খবর শুনুন';
     }
 
-    function playNextSentence() {
+    function playNextSentenceWeb() {
       if (!isSpeaking || currentSpeechIndex >= speechUtteranceList.length) {
         stopSpeaking();
         return;
       }
 
       const textToSpeak = speechUtteranceList[currentSpeechIndex];
-      const utter = new SpeechSynthesisUtterance(textToSpeak);
-      utter.lang = 'bn-BD';
-      utter.rate = 0.95;
-      utter.pitch = 1.0;
+      const audioUrl = 'https://newsbangla.vercel.app/api/tts?text=' + encodeURIComponent(textToSpeak);
 
-      if (!availableBengaliVoice) initVoices();
-      if (availableBengaliVoice) {
-        utter.voice = availableBengaliVoice;
+      // Play via sweet female neural voice API
+      if (webAudioPlayer) {
+        try { webAudioPlayer.pause(); } catch(e){}
       }
-
-      utter.onend = function() {
+      webAudioPlayer = new Audio(audioUrl);
+      webAudioPlayer.onended = function() {
         if (!isSpeaking) return;
         currentSpeechIndex++;
-        playNextSentence();
+        playNextSentenceWeb();
+      };
+      webAudioPlayer.onerror = function() {
+        // Fallback to Web Speech API if API stream has any glitch
+        if ('speechSynthesis' in window) {
+          const utter = new SpeechSynthesisUtterance(textToSpeak);
+          utter.lang = 'bn-BD';
+          utter.pitch = 1.15; // Higher sweet female pitch
+          utter.rate = 0.95;
+          if (availableBengaliFemaleVoice) utter.voice = availableBengaliFemaleVoice;
+          utter.onend = function() {
+            currentSpeechIndex++;
+            playNextSentenceWeb();
+          };
+          utter.onerror = function() {
+            currentSpeechIndex++;
+            playNextSentenceWeb();
+          };
+          window.speechSynthesis.speak(utter);
+        } else {
+          currentSpeechIndex++;
+          playNextSentenceWeb();
+        }
       };
 
-      utter.onerror = function() {
-        if (!isSpeaking) return;
-        currentSpeechIndex++;
-        playNextSentence();
-      };
-
-      window.speechSynthesis.speak(utter);
+      webAudioPlayer.play().catch(function() {
+        if ('speechSynthesis' in window) {
+          const utter = new SpeechSynthesisUtterance(textToSpeak);
+          utter.lang = 'bn-BD';
+          utter.pitch = 1.15;
+          utter.rate = 0.95;
+          if (availableBengaliFemaleVoice) utter.voice = availableBengaliFemaleVoice;
+          utter.onend = function() {
+            currentSpeechIndex++;
+            playNextSentenceWeb();
+          };
+          window.speechSynthesis.speak(utter);
+        }
+      });
     }
 
     function toggleSpeech() {
@@ -2717,7 +2691,7 @@
       
       const fullSentences = [];
       const cleanTitle = sanitizeTextForSpeech(rawTitle);
-      if (cleanTitle) fullSentences.push(cleanTitle);
+      if (cleanTitle) fullSentences.push('শিরোনাম: ' + cleanTitle);
 
       rawParas.forEach(p => {
         const cleanP = sanitizeTextForSpeech(p);
@@ -2732,51 +2706,23 @@
 
       if (fullSentences.length === 0) return;
 
-      const fullTextToRead = fullSentences.join('। ');
-
-      // CHECK: If Android Native TTS interface is available (in APK)
-      if (window.AndroidTTS && typeof window.AndroidTTS.speak === 'function') {
-        isSpeaking = true;
-        const btn = document.getElementById('ttsSpeakBtn');
-        const text = document.getElementById('ttsBtnText');
-        if (btn) btn.classList.add('speaking');
-        if (text) text.innerText = 'থামান';
-        window.AndroidTTS.speak(fullTextToRead);
-        return;
-      }
-
-      // FALLBACK: High Quality Online Stream or Web Speech API
       isSpeaking = true;
       const btn = document.getElementById('ttsSpeakBtn');
       const text = document.getElementById('ttsBtnText');
       if (btn) btn.classList.add('speaking');
       if (text) text.innerText = 'থামান';
 
-      // First check if browser has a Bengali native voice
-      let hasBengaliVoice = false;
-      if ('speechSynthesis' in window) {
-        const vs = window.speechSynthesis.getVoices() || [];
-        for (let i = 0; i < vs.length; i++) {
-          const l = (vs[i].lang || '').toLowerCase();
-          const n = (vs[i].name || '').toLowerCase();
-          if (l.startsWith('bn') || n.includes('bengali') || n.includes('bangla')) {
-            hasBengaliVoice = true;
-            availableBengaliVoice = vs[i];
-            break;
-          }
-        }
+      // 1. If running inside Android APK
+      if (window.AndroidTTS && typeof window.AndroidTTS.speakFullArticle === 'function') {
+        window.AndroidTTS.speakFullArticle(fullSentences);
+        return;
       }
 
-      if (hasBengaliVoice) {
-        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-        window.speechSynthesis.cancel();
-        speechUtteranceList = fullSentences;
-        currentSpeechIndex = 0;
-        playNextSentence();
-      } else {
-        // Play online high-quality natural voice stream via API
-        playCloudTtsAudio(fullSentences[0]);
-      }
+      // 2. Browser web audio sequence
+      speechUtteranceList = fullSentences;
+      currentSpeechIndex = 0;
+      initVoices();
+      playNextSentenceWeb();
     }
 
     function closeModal() {

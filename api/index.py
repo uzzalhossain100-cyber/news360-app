@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import json
@@ -8,8 +8,10 @@ import urllib.request
 import re
 from xml.etree import ElementTree as ET
 from bs4 import BeautifulSoup
+import edge_tts
+import asyncio
 
-app = FastAPI(title="News360 Vercel Serverless API")
+app = FastAPI(title="NewsBangla Vercel Serverless API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +23,19 @@ app.add_middleware(
 
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 headers_bot = {'User-Agent': 'facebookexternalhit/1.1'}
+
+def is_clean_headline(t):
+    if not t or len(t) < 15: return False
+    bulletin_patterns = [
+        r'(সকাল|দুপুর|সন্ধ্যা|রাত|রাতের|দিনের)\s*(৭|৮|৯|১০|১১|১২|১|২|৩|৪|৫|৬|\d+)\s*টার\s*(সংবাদ|বুলেটিন|খবর)',
+        r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'সংবাদ\s*সারসংক্ষেপ',
+        r'চ্যানেল\s*২৪\s*(লাইভ|সংবাদ)', r'আরটিভি\s*(লাইভ|সংবাদ)', r'এনটিভি\s*(লাইভ|সংবাদ)',
+        r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+'
+    ]
+    for pat in bulletin_patterns:
+        if re.search(pat, t, re.IGNORECASE):
+            return False
+    return True
 
 def detect_cat(title, url=""):
     t = title.lower()
@@ -86,34 +101,7 @@ def get_news(
     except Exception:
         pass
 
-    # 2. Ittefaq
-    try:
-        req = urllib.request.Request("https://www.ittefaq.com.bd/latest-news", headers=headers_bot)
-        with urllib.request.urlopen(req, timeout=4) as r:
-            soup = BeautifulSoup(r.read(), 'html.parser')
-            now = time.time()
-            for a in soup.find_all('a', href=True):
-                h = a['href']
-                t = a.get_text(strip=True)
-                if re.search(r'/\d+/', h) and len(t) > 20:
-                    full = h if h.startswith('http') else ('https:' + h if h.startswith('//') else 'https://www.ittefaq.com.bd' + h)
-                    cat = detect_cat(t)
-                    news.append({
-                        "id": full,
-                        "title": t,
-                        "link": full,
-                        "timestamp": now,
-                        "category": cat,
-                        "source_id": "ittefaq",
-                        "source_name": "দৈনিক ইত্তেফাক",
-                        "source_badge": "Ittefaq",
-                        "source_color": "#2563eb",
-                        "image": "https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=600&auto=format&fit=crop&q=80"
-                    })
-    except Exception:
-        pass
-
-        # 3. Channel 24 via RSS
+    # 2. Channel 24 via RSS
     try:
         req = urllib.request.Request("https://news.google.com/rss/search?q=site:channel24bd.tv&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3) as r:
@@ -138,7 +126,7 @@ def get_news(
     except Exception:
         pass
 
-    # 4. NTV via RSS
+    # 3. NTV via RSS
     try:
         req = urllib.request.Request("https://news.google.com/rss/search?q=site:ntvbd.com&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3) as r:
@@ -163,7 +151,7 @@ def get_news(
     except Exception:
         pass
 
-    # 5. RTV via RSS
+    # 4. RTV via RSS
     try:
         req = urllib.request.Request("https://news.google.com/rss/search?q=site:rtvonline.com&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3) as r:
@@ -213,3 +201,32 @@ def get_article(url: str = Query(...)):
     except Exception:
         pass
     return {"title": title, "paragraphs": paras[:10]}
+
+# High-Quality Bengali Sweet Female Voice Reader API (Nabanita Neural)
+@app.get("/api/tts")
+async def tts_stream(text: str = Query(...)):
+    # Clean text: remove URLs, English slugs, extra symbols
+    clean = re.sub(r'https?://\S+', '', text)
+    clean = re.sub(r'www\.\S+', '', clean)
+    clean = re.sub(r'[a-zA-Z0-9_\-\.\/]{10,}', '', clean).strip()
+    
+    # Cap text length for fast streaming
+    if len(clean) > 800:
+        clean = clean[:800]
+    
+    # Use sweet female voice: bn-BD-NabanitaNeural
+    voice = "bn-BD-NabanitaNeural"
+    communicate = edge_tts.Communicate(clean, voice, rate="+2%", pitch="+1Hz")
+    audio_data = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_data += chunk["data"]
+            
+    return Response(
+        content=audio_data,
+        media_type="audio/mpeg",
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "Content-Disposition": "inline; filename=news_voice.mp3"
+        }
+    )
