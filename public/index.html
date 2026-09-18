@@ -2547,7 +2547,7 @@
     }
 
     
-    // 100% Guaranteed Bengali Voice Reader (Dual-Mode: High-Fidelity Bengali Cloud Audio + WebSpeech + Android Native)
+    // 100% Guaranteed Bengali Voice Reader (Optimized Speed: 1.1x, Zero Drop Rate, Full Paragraph Reading)
     let isSpeaking = false;
     let speechUtteranceList = [];
     let currentSpeechIndex = 0;
@@ -2600,7 +2600,37 @@
       updateSpeechUI(false);
     }
 
-    // Play Bengali speech audio via soundoftext API (CORS friendly, works on 100% laptops & desktop browsers)
+    // Smart sentence breaker that NEVER drops words, handling Bengali Dari (।), ?, ! and commas properly
+    function breakIntoChunks(text, maxLen = 85) {
+      if (!text) return [];
+      const chunks = [];
+      
+      // Split on Bengali full stops or exclamation
+      const primarySentences = text.split(/[।!?\n]+/).map(s => s.trim()).filter(Boolean);
+
+      primarySentences.forEach(sentence => {
+        if (sentence.length <= maxLen) {
+          chunks.push(sentence);
+        } else {
+          // If a sentence is long, split on commas or spaces so no words are cut
+          const words = sentence.split(/\s+/);
+          let curr = '';
+          for (let i = 0; i < words.length; i++) {
+            const word = words[i];
+            if ((curr + ' ' + word).trim().length <= maxLen) {
+              curr = (curr + ' ' + word).trim();
+            } else {
+              if (curr) chunks.push(curr);
+              curr = word;
+            }
+          }
+          if (curr) chunks.push(curr);
+        }
+      });
+      return chunks;
+    }
+
+    // Play Bengali speech audio via soundoftext API with 1.1x playback speed
     function fetchAndPlayCloudAudio(textChunk, onSuccess, onFail) {
       fetch('https://api.soundoftext.com/sounds', {
         method: 'POST',
@@ -2634,6 +2664,8 @@
                     try { globalAudioPlayer.pause(); } catch(e){}
                   }
                   globalAudioPlayer = new Audio(resData.location);
+                  // Faster, professional newscaster pace (1.1x)
+                  globalAudioPlayer.playbackRate = 1.12;
                   globalAudioPlayer.onended = onSuccess;
                   globalAudioPlayer.onerror = onFail;
                   const p = globalAudioPlayer.play();
@@ -2649,7 +2681,7 @@
                 clearInterval(poll);
                 onFail();
               });
-          }, 600);
+          }, 500);
         } else {
           onFail();
         }
@@ -2663,8 +2695,7 @@
         return;
       }
 
-      const rawText = speechUtteranceList[currentSpeechIndex];
-      const textChunk = rawText.length > 95 ? rawText.substring(0, 95) : rawText;
+      const textChunk = speechUtteranceList[currentSpeechIndex];
 
       // 1. Try High-Quality Cloud Audio First
       fetchAndPlayCloudAudio(
@@ -2681,7 +2712,7 @@
             const utter = new SpeechSynthesisUtterance(textChunk);
             utter.lang = 'bn-BD';
             utter.pitch = 1.25;
-            utter.rate = 0.95;
+            utter.rate = 1.10; // Prompt, natural brisk speed
             utter.onend = function() {
               if (!isSpeaking) return;
               currentSpeechIndex++;
@@ -2712,17 +2743,16 @@
       
       const fullSentences = [];
       const cleanTitle = sanitizeTextForSpeech(rawTitle);
-      if (cleanTitle) fullSentences.push('শিরোনাম: ' + cleanTitle);
+      if (cleanTitle) {
+        const titleChunks = breakIntoChunks('শিরোনাম: ' + cleanTitle);
+        fullSentences.push(...titleChunks);
+      }
 
       rawParas.forEach(p => {
         const cleanP = sanitizeTextForSpeech(p);
         if (!cleanP) return;
-        const parts = cleanP.split(/[।!?\n]+/).map(s => s.trim()).filter(Boolean);
-        if (parts.length > 0) {
-          fullSentences.push(...parts);
-        } else {
-          fullSentences.push(cleanP);
-        }
+        const chunks = breakIntoChunks(cleanP);
+        fullSentences.push(...chunks);
       });
 
       if (fullSentences.length === 0) return;
