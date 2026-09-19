@@ -1788,48 +1788,19 @@
           <!-- Image Upload / Image Preview -->
           <div style="display: flex; flex-direction: column; gap: 6px;">
             <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">ছবি যোগ করুন (ডিভাইস থেকে আপলোড করুন)</label>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <!-- Direct File Picker for Browser & Supported WebViews -->
-              <label for="adminArticleImageFile" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);">
-                <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <!-- Big prominent Gallery Upload Button -->
+              <label for="adminArticleImageFile" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; border: none; padding: 11px 20px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);">
+                <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                 </svg>
                 গ্যালারি থেকে ছবি বাছুন
               </label>
-              <input type="file" id="adminArticleImageFile" accept="image/*" onchange="previewAdminImage(event)" style="display: inline-block; font-size: 12.5px; color: var(--text-muted); max-width: 190px;">
-              <span style="font-size: 12.5px; color: var(--text-muted);">বা ছবির অনলাইন URL লিখুন:</span>
-              <input type="url" id="adminArticleImageUrl" oninput="handleImageUrlInput(this.value)" placeholder="https://example.com/photo.jpg" style="flex: 1; min-width: 180px; box-sizing: border-box; padding: 8px 12px; font-size: 13.5px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-main); outline: none;">
+              <input type="file" id="adminArticleImageFile" accept="image/*" onchange="previewAdminImage(event)" style="display: inline-block; font-size: 13px; color: var(--text-muted); max-width: 210px;">
+              <input type="hidden" id="adminArticleImageUrl" value="">
             </div>
 
-            <!-- Instant One-Tap Category Photo Presets (100% Reliable in all Mobile Apps) -->
-            <div style="margin-top: 10px; padding: 10px 12px; background: var(--bg-primary, #f8fafc); border-radius: 10px; border: 1px dashed var(--border-color, #cbd5e1);">
-              <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">
-                ⚡ অ্যাপে তাৎক্ষণিক প্রেস/ক্যাটাগরি ছবি নির্বাচন করুন (এক স্পর্শে ছবি যোগ):
-              </span>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button type="button" onclick="selectPresetPhoto('national')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  🇧🇩 বাংলাদেশ সংবাদ
-                </button>
-                <button type="button" onclick="selectPresetPhoto('international')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  🌐 আন্তর্জাতিক
-                </button>
-                <button type="button" onclick="selectPresetPhoto('politics')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  🏛️ রাজনীতি
-                </button>
-                <button type="button" onclick="selectPresetPhoto('sports')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  ⚽ খেলাধুলা
-                </button>
-                <button type="button" onclick="selectPresetPhoto('business')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  📈 অর্থনীতি
-                </button>
-                <button type="button" onclick="selectPresetPhoto('entertainment')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  🎬 বিনোদন
-                </button>
-                <button type="button" onclick="selectPresetPhoto('tech')" style="background: var(--bg-card, #ffffff); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px;">
-                  💻 প্রযুক্তি
-                </button>
-              </div>
-            </div>
+            
             <!-- Image Preview Container -->
             <div id="adminImagePreviewWrap" style="display: none; margin-top: 10px;">
               <img id="adminImagePreviewImg" src="" alt="Preview" style="max-height: 180px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color);">
