@@ -1789,9 +1789,16 @@
           <div style="display: flex; flex-direction: column; gap: 6px;">
             <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">ছবি যোগ করুন (ডিভাইস থেকে আপলোড করুন)</label>
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-              <input type="file" id="adminArticleImageFile" accept="image/*" onchange="previewAdminImage(event)" style="font-size: 13.5px; color: var(--text-muted);">
-              <span style="font-size: 12.5px; color: var(--text-muted);">বা ছবির অনলাইন URL লিখুন:</span>
-              <input type="url" id="adminArticleImageUrl" placeholder="https://example.com/photo.jpg" style="flex: 1; min-width: 200px; box-sizing: border-box; padding: 8px 12px; font-size: 13.5px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-main); outline: none;">
+              <!-- Large Touch-Friendly File Picker Button for Mobile & Desktop -->
+              <button type="button" onclick="triggerAdminFileInput()" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; border: none; padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                গ্যালারি থেকে ছবি বাছুন
+              </button>
+              <input type="file" id="adminArticleImageFile" accept="image/*" onchange="previewAdminImage(event)" style="font-size: 13px; color: var(--text-muted); max-width: 210px;">
+              <span style="font-size: 12.5px; color: var(--text-muted);">বা অনলাইন URL:</span>
+              <input type="url" id="adminArticleImageUrl" placeholder="https://example.com/photo.jpg" style="flex: 1; min-width: 180px; box-sizing: border-box; padding: 8px 12px; font-size: 13.5px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-main); outline: none;">
             </div>
             <!-- Image Preview Container -->
             <div id="adminImagePreviewWrap" style="display: none; margin-top: 10px;">
@@ -3449,21 +3456,53 @@
       }
     }
 
+    function triggerAdminFileInput() {
+      const fileInput = document.getElementById('adminArticleImageFile');
+      if (fileInput) {
+        fileInput.click();
+      }
+    }
+
     function previewAdminImage(e) {
-      const file = e.target.files[0];
-      const previewImg = document.getElementById('adminImagePreviewImg');
-      const previewWrap = document.getElementById('adminImagePreviewWrap');
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          currentAdminUploadedBase64Image = evt.target.result;
+      const files = (e.target && e.target.files) ? e.target.files : (e.dataTransfer ? e.dataTransfer.files : null);
+      if (!files || files.length === 0) return;
+      const file = files[0];
+
+      // Compress and resize image if large so it loads instantly on mobile
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 850;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          currentAdminUploadedBase64Image = canvas.toDataURL('image/jpeg', 0.82);
+          const previewImg = document.getElementById('adminImagePreviewImg');
+          const previewWrap = document.getElementById('adminImagePreviewWrap');
           if (previewImg && previewWrap) {
-            previewImg.src = evt.target.result;
+            previewImg.src = currentAdminUploadedBase64Image;
             previewWrap.style.display = 'block';
           }
+          showToast('✓ ছবি সফলভাবে নির্বাচন করা হয়েছে!');
         };
-        reader.readAsDataURL(file);
-      }
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
     }
 
     function getAdminCustomArticles() {
@@ -3700,16 +3739,39 @@
       }
     }
 
+    let articleIdToDelete = null;
+
     function deleteCustomArticle(id) {
-      if (confirm('আপনি কি নিশ্চিত যে এই সংবাদটি স্থায়ীভাবে মুছে ফেলতে চান?')) {
-        let customArticles = getAdminCustomArticles();
-        customArticles = customArticles.filter(a => a.id !== id);
-        saveAdminCustomArticles(customArticles);
-        integrateCustomArticles();
-        renderAdminNewsList();
-        renderNewsGrid();
-        updateTicker();
+      articleIdToDelete = id;
+      const modal = document.getElementById('adminDeleteConfirmModal');
+      if (modal) {
+        modal.style.display = 'flex';
+      } else {
+        confirmDeleteArticleExecute();
       }
+    }
+
+    function closeAdminDeleteModal() {
+      articleIdToDelete = null;
+      const modal = document.getElementById('adminDeleteConfirmModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    function confirmDeleteArticleExecute() {
+      if (!articleIdToDelete) return;
+      const id = articleIdToDelete;
+      closeAdminDeleteModal();
+      
+      let customArticles = getAdminCustomArticles();
+      customArticles = customArticles.filter(a => a.id !== id);
+      saveAdminCustomArticles(customArticles);
+      integrateCustomArticles();
+      renderAdminNewsList();
+      renderNewsGrid();
+      updateTicker();
+      showToast('✓ সংবাদটি সফলভাবে মুছে ফেলা হয়েছে');
     }
 
     function renderAdminNewsList() {
@@ -3878,6 +3940,23 @@
       </div>
     </div>
   </div>
+  <!-- Custom In-App Delete Confirmation Modal (100% WebView & Mobile Compatible) -->
+  <div id="adminDeleteConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px);">
+    <div style="background: var(--bg-card, #ffffff); border-radius: 20px; max-width: 380px; width: 100%; padding: 26px 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid var(--border-color, #e2e8f0); animation: modalFadeIn 0.2s ease;">
+      <div style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </svg>
+      </div>
+      <h3 style="font-size: 18px; font-weight: 800; color: var(--text-main, #0f172a); margin-bottom: 8px;">খবর মুছে ফেলুন</h3>
+      <p style="font-size: 13.5px; color: var(--text-muted, #64748b); line-height: 1.5; margin-bottom: 22px;">আপনি কি নিশ্চিত যে এই সংবাদটি স্থায়ীভাবে মুছে ফেলতে চান?</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button type="button" onclick="closeAdminDeleteModal()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: var(--text-main, #334155); font-weight: 700; font-size: 13.5px; cursor: pointer;">না, রাখুন</button>
+        <button type="button" onclick="confirmDeleteArticleExecute()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);">হ্যাঁ, ডিলিট করুন</button>
+      </div>
+    </div>
+  </div>
+
 
 </body>
 </html>
