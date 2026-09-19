@@ -1787,9 +1787,32 @@
 
       let sentSuccess = false;
 
-      // 1. Primary Attempt via Direct FormSubmit endpoint
+      // 1. Try serverless backend proxy endpoint first, then FormSubmit
       try {
-        const resp = await fetch('https://formsubmit.co/ajax/' + _DEST_TAG, {
+        const resp = await fetch('/api/contact', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            name: name,
+            phone: phone,
+            email: email,
+            message: userMessage
+          })
+        });
+        if (resp.ok) {
+          sentSuccess = true;
+        }
+      } catch (err) {
+        console.warn('API contact route notice:', err);
+      }
+
+      // 2. Client-side direct FormSubmit endpoint as secondary
+      if (!sentSuccess) {
+        try {
+          const resp = await fetch('https://formsubmit.co/ajax/' + _DEST_TAG, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1806,12 +1829,13 @@
           })
         });
 
-        const resData = await resp.json().catch(() => ({}));
-        if (resp.ok && (resData.success === 'true' || resData.success === true)) {
-          sentSuccess = true;
+          const resData = await resp.json().catch(() => ({}));
+          if (resp.ok && (resData.success === 'true' || resData.success === true)) {
+            sentSuccess = true;
+          }
+        } catch (err) {
+          console.warn('Direct dispatch notice:', err);
         }
-      } catch (err) {
-        console.warn('Primary dispatch notice:', err);
       }
 
       if (sentSuccess) {

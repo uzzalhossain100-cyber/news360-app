@@ -266,3 +266,44 @@ async def tts_stream(text: str = Query(...)):
             "Content-Disposition": "inline; filename=news_voice.mp3"
         }
     )
+
+
+from pydantic import BaseModel
+
+class ContactMessageRequest(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = "উল্লেখ করা হয়নি"
+    message: str
+
+@app.post("/api/contact")
+def submit_contact_message(req: ContactMessageRequest):
+    # Formats message strictly with Name and Mobile number at the bottom
+    formatted = f"{req.message}\n\n-------------------------\nপ্রেরকের নাম: {req.name}\nমোবাইল নাম্বার: {req.phone}\nইমেইল: {req.email}"
+    
+    # Forward to formsubmit.co
+    try:
+        payload = json.dumps({
+            "_subject": f"NewsBangla অ্যাপ থেকে বার্তা: {req.name}",
+            "_template": "table",
+            "_captcha": "false",
+            "name": req.name,
+            "phone": req.phone,
+            "email": req.email,
+            "message": formatted
+        }).encode("utf-8")
+        
+        target_email = "uzzalhossain.100@gmail.com"
+        url = f"https://formsubmit.co/ajax/{target_email}"
+        request = urllib.request.Request(url, data=payload, headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://newsbangla.vercel.app",
+            "Referer": "https://newsbangla.vercel.app/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        })
+        with urllib.request.urlopen(request, timeout=8) as r:
+            res = json.loads(r.read().decode("utf-8"))
+            return {"status": "success", "result": res}
+    except Exception as e:
+        return {"status": "partial", "error": str(e), "message": "Fallback handled on client"}
