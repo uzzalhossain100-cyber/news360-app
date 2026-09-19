@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 headers_bot = {'User-Agent': 'facebookexternalhit/1.1'}
 
 def is_clean_headline(t):
@@ -29,7 +29,6 @@ def is_clean_headline(t):
     bulletin_patterns = [
         r'(সকাল|দুপুর|সন্ধ্যা|রাত|রাতের|দিনের)\s*(৭|৮|৯|১০|১১|১২|১|২|৩|৪|৫|৬|\d+)\s*টার\s*(সংবাদ|বুলেটিন|খবর)',
         r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'সংবাদ\s*সারসংক্ষেপ',
-        r'চ্যানেল\s*২৪\s*(লাইভ|সংবাদ)', r'আরটিভি\s*(লাইভ|সংবাদ)', r'এনটিভি\s*(লাইভ|সংবাদ)',
         r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+'
     ]
     for pat in bulletin_patterns:
@@ -39,33 +38,21 @@ def is_clean_headline(t):
 
 def detect_cat(title, url=""):
     t = title.lower()
-    u = (url or '').lower()
-    if '/sports' in u or '/khela' in u: return 'sports'
-    if '/entertainment' in u or '/binodon' in u: return 'entertainment'
-    if '/economy' in u or '/business' in u or '/banijjo' in u: return 'economy'
-    if '/technology' in u or '/tech' in u or '/projukti' in u: return 'tech'
-    if '/international' in u or '/bishwo' in u or '/world' in u: return 'international'
-
-    sportsWords = ['ক্রিকেট', 'ফুটবল', 'মেসি', 'রোনালদো', 'অধিনায়ক', 'বিশ্বকাপ', 'উইকেট', 'গোল', 'ম্যাচ', 'সিরিজ', 'বিসিবি', 'ফিফা', 'সাকিব', 'তামিম', 'বোলার', 'ব্যাটসম্যান', 'অলরাউন্ডার', 'টেনিস', 'হাফসেঞ্চুরি', 'সেঞ্চুরি', 'টুর্নামেন্ট', 'আইপিএল', 'বিপিএল', 'টাইগার', 'ম্যানচেস্টার', 'বার্সেলোনা', 'রিয়াল মাদ্রিদ', 'পিএসজি', 'লা লিগা', 'প্রিমিয়ার লিগ', 'চ্যাম্পিয়নস লিগ', 'খেলার খবর', 'খেলাধুলা', 'স্টেডিয়াম', 'বোলিং', 'ব্যাটিং']
+    sportsWords = ['ক্রিকেট', 'ফুটবল', 'মেসি', 'রোনালদো', 'অধিনায়ক', 'বিশ্বকাপ', 'উইকেট', 'গোল', 'ম্যাচ', 'সিরিজ', 'বিসিবি', 'ফিফা', 'সাকিব', 'তামিম', 'বোলার', 'ব্যাটসম্যান', 'অলরাউন্ডার', 'টেনিস', 'টুর্নামেন্ট', 'খেলা', 'স্টেডিয়াম']
     for w in sportsWords:
         if w in t: return 'sports'
-
-    entWords = ['সিনেমা', 'নাটক', 'চলচ্চিত্র', 'হলিউড', 'বলিউড', 'ঢালিউড', 'শাকিব খান', 'তারকা', 'বিনোদন', 'মিউজিক ভিডিও', 'ফিল্ম', 'কনসার্ট', 'গায়িকা', 'গায়ক', 'ওটিটি', 'নায়ক', 'নায়িকা', 'অভিনেতা', 'অভিনেত্রী', 'শুটিং', 'অস্কার', 'কান চলচ্চিত্র', 'নাট্যকার', 'গান রিলিজ', 'নতুন গান', 'অ্যালবাম']
+    entWords = ['সিনেমা', 'নাটক', 'চলচ্চিত্র', 'হলিউড', 'বলিউড', 'ঢালিউড', 'শাকিব খান', 'তারকা', 'বিনোদন', 'মিউজিক ভিডিও', 'ফিল্ম', 'কনসার্ট', 'গায়িকা', 'গায়ক', 'ওটিটি', 'নায়ক', 'নায়িকা', 'অভিনেতা', 'অভিনেত্রী', 'গান']
     for w in entWords:
         if w in t: return 'entertainment'
-
-    techWords = ['প্রযুক্তি', 'স্মার্টফোন', 'আইফোন', 'এআই', 'কৃত্রিম বুদ্ধিমত্তা', 'অ্যাপল', 'ফেসবুক', 'গুগল', 'ইন্টারনেট', 'কম্পিউটার', 'হোয়াটসঅ্যাপ', 'সাইবার', 'রোবট', 'টেলিযোগাযোগ', 'ডিজিটাল', 'ড্রোন', 'সফটওয়্যার', 'গ্যাজেট', 'আইওএস', 'অ্যান্ড্রয়েড', 'মেটা', 'মাইক্রোসফট', 'মহাকাশ', 'নাসা', 'চ্যাটজিপিটি', 'ওপেনএআই', 'টেলিকম']
+    techWords = ['প্রযুক্তি', 'স্মার্টফোন', 'আইফোন', 'এআই', 'কৃত্রিম বুদ্ধিমত্তা', 'অ্যাপল', 'ফেসবুক', 'গুগল', 'ইন্টারনেট', 'কম্পিউটার', 'হোয়াটসঅ্যাপ', 'সাইবার', 'রোবট', 'টেলিযোগাযোগ', 'ডিজিটাল', 'ড্রোন', 'সফটওয়্যার', 'গ্যাজেট', 'আইওএস', 'অ্যান্ড্রয়েড', 'মেটা', 'মাইক্রোসফট', 'মহাকাশ', 'নাসা', 'চ্যাটজিপিটি']
     for w in techWords:
         if w in t: return 'tech'
-
-    econWords = ['অর্থনীতি', 'শেয়ারবাজার', 'পুঁজিবাজার', 'ডলার', 'মুদ্রাস্ফীতি', 'স্বর্ণের দাম', 'বাজেট', 'রাজস্ব', 'রপ্তানি', 'আমদানি', 'রেমিট্যান্স', 'জ্বালানি', 'বণিক', 'বাণিজ্য', 'ব্যবসায়ী', 'মূল্যবৃদ্ধি', 'আইএমএফ', 'মূল্যস্ফীতি', 'ভ্যাট', 'এলএনজি', 'পেট্রোবাংলা', 'সোনা', 'অর্থনৈতিক', 'বাণিজ্যিক', 'টাকার মান', 'সঞ্চয়পত্র', 'সুদের হার', 'ব্যাংকিং', 'বাংলাদেশ ব্যাংক']
+    econWords = ['অর্থনীতি', 'শেয়ারবাজার', 'পুঁজিবাজার', 'ডলার', 'মুদ্রাস্ফীতি', 'স্বর্ণের দাম', 'বাজেট', 'রাজস্ব', 'রপ্তানি', 'আমদানি', 'রেমিট্যান্স', 'জ্বালানি', 'বাণিজ্য', 'ব্যবসায়ী', 'মূল্যবৃদ্ধি', 'আইএমএফ', 'ভ্যাট', 'এলএনজি', 'সোনা', 'ব্যাংকিং', 'বাংলাদেশ ব্যাংক']
     for w in econWords:
         if w in t: return 'economy'
-
-    intlWords = ['যুক্তরাষ্ট্র', 'চীন', 'ভারত', 'পাকিস্তান', 'রাশিয়া', 'ইউক্রেন', 'ইসরায়েল', 'গাজা', 'ফিলিস্তিন', 'ইরান', 'আন্তর্জাতিক', 'ট্রাম্প', 'বাইডেন', 'জাতিসংঘ', 'মধ্যপ্রাচ্য', 'ব্রিটেন', 'নেপাল', 'আমেরিকা', 'লেবানন', 'পুতিন', 'হোয়াইট হাউস', 'ইউরোপ', 'ফ্রান্স', 'জার্মানি', 'সৌদি আরব', 'ইয়েমেন', 'হুতি', 'বেইজিং', 'মস্কো', 'তেহরান', 'কিয়েভ', 'ন্যাটো', 'সিরিয়া']
+    intlWords = ['যুক্তরাষ্ট্র', 'চীন', 'ভারত', 'পাকিস্তান', 'রাশিয়া', 'ইউক্রেন', 'ইসরায়েল', 'গাজা', 'ফিলিস্তিন', 'ইরান', 'আন্তর্জাতিক', 'ট্রাম্প', 'বাইডেন', 'জাতিসংঘ', 'মধ্যপ্রাচ্য', 'ব্রিটেন', 'নেপাল', 'আমেরিকা', 'লেবানন', 'পুতিন']
     for w in intlWords:
         if w in t: return 'international'
-
     return 'national'
 
 @app.get("/api/news")
@@ -75,104 +62,159 @@ def get_news(
     limit: int = Query(100)
 ):
     news = []
-    # 1. Prothom Alo
+    now = time.time()
+    
+    # 1. Prothom Alo (Full Real News Photos from Official RSS)
     try:
         req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=5) as r:
             root = ET.fromstring(r.read())
-            now = time.time()
-            for it in root.findall('.//item')[:25]:
-                t = it.find('title')
-                l = it.find('link')
-                if t is not None and l is not None:
-                    cat = detect_cat(t.text)
-                    news.append({
-                        "id": l.text,
-                        "title": t.text.strip(),
-                        "link": l.text.strip(),
-                        "timestamp": now,
-                        "category": cat,
-                        "source_id": "prothomalo",
-                        "source_name": "প্রথম আলো",
-                        "source_badge": "Prothom Alo",
-                        "source_color": "#e11d48",
-                        "image": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&auto=format&fit=crop&q=80"
-                    })
+            for it in root.findall('.//item')[:30]:
+                t = it.find('title').text.strip()
+                l = it.find('link').text.strip()
+                img = ''
+                content = it.find('{http://search.yahoo.com/mrss/}content')
+                if content is not None and 'url' in content.attrib:
+                    img = content.attrib['url']
+                if not img:
+                    thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                    if thumb is not None and 'url' in thumb.attrib:
+                        img = thumb.attrib['url']
+                
+                if not img or 'defaultog' in img:
+                    img = 'https://media.prothomalo.com/prothomalo-bangla/2024-09-22/5lwyn5je/defaultog.jpg'
+                    
+                cat = detect_cat(t)
+                news.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now,
+                    "category": cat,
+                    "source_id": "prothomalo",
+                    "source_name": "প্রথম আলো",
+                    "source_badge": "Prothom Alo",
+                    "source_color": "#e11d48",
+                    "image": img
+                })
     except Exception:
         pass
 
-    # 2. Channel 24 via RSS
+    # 2. BBC Bangla
     try:
-        req = urllib.request.Request("https://news.google.com/rss/search?q=site:channel24bd.tv&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=3) as r:
-            soup = BeautifulSoup(r.read(), 'xml')
-            for it in soup.find_all('item')[:15]:
-                raw_t = it.find('title').text
-                t = re.sub(r'\s*-\s*(Channel 24|News).*$', '', raw_t, flags=re.I).strip()
-                l = it.find('link').text
-                if len(t) > 20 and not t.startswith('Channel 24'):
-                    news.append({
-                        "id": l,
-                        "title": t,
-                        "link": l,
-                        "timestamp": time.time(),
-                        "category": detect_cat(t, l),
-                        "source_id": "channel24",
-                        "source_name": "চ্যানেল ২৪",
-                        "source_badge": "Channel 24",
-                        "source_color": "#0284c7",
-                        "image": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&auto=format&fit=crop&q=80"
-                    })
+        req = urllib.request.Request("https://feeds.bbci.co.uk/bengali/rss.xml", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            root = ET.fromstring(r.read())
+            for it in root.findall('.//item')[:20]:
+                t = it.find('title').text.strip()
+                l = it.find('link').text.strip()
+                thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                img = thumb.attrib['url'] if thumb is not None and 'url' in thumb.attrib else 'https://ichef.bbci.co.uk/news/1200/branded_bengali/262b/live/51c55dd0-b30a-11f1-ba3a-274c672664f6.jpg'
+                cat = detect_cat(t)
+                news.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now,
+                    "category": cat,
+                    "source_id": "bbc",
+                    "source_name": "বিবিসি বাংলা",
+                    "source_badge": "BBC Bangla",
+                    "source_color": "#dc2626",
+                    "image": img
+                })
     except Exception:
         pass
 
-    # 3. NTV via RSS
+    # 3. Channel 24 (Live Official Feed with Real News Images)
     try:
-        req = urllib.request.Request("https://news.google.com/rss/search?q=site:ntvbd.com&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=3) as r:
-            soup = BeautifulSoup(r.read(), 'xml')
-            for it in soup.find_all('item')[:15]:
-                raw_t = it.find('title').text
-                t = re.sub(r'\s*-\s*(NTV|NTV Online).*$', '', raw_t, flags=re.I).strip()
-                l = it.find('link').text
-                if len(t) > 20 and not t.startswith('NTV'):
-                    news.append({
-                        "id": l,
-                        "title": t,
-                        "link": l,
-                        "timestamp": time.time(),
-                        "category": detect_cat(t, l),
-                        "source_id": "ntv",
-                        "source_name": "এনটিভি",
-                        "source_badge": "NTV",
-                        "source_color": "#16a34a",
-                        "image": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&auto=format&fit=crop&q=80"
-                    })
+        req = urllib.request.Request("https://www.youtube.com/feeds/videos.xml?channel_id=UCHLqIOMPk20w-6cFgkA90jw", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            root = ET.fromstring(r.read())
+            for entry in root.findall('{http://www.w3.org/2005/Atom}entry')[:15]:
+                t = entry.find('{http://www.w3.org/2005/Atom}title').text.strip()
+                l = entry.find('{http://www.w3.org/2005/Atom}link').attrib.get('href', '')
+                media_group = entry.find('{http://search.yahoo.com/mrss/}group')
+                thumb = media_group.find('{http://search.yahoo.com/mrss/}thumbnail')
+                img = thumb.attrib.get('url', '') if thumb is not None else ''
+                if not is_clean_headline(t): continue
+                news.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now,
+                    "category": detect_cat(t),
+                    "source_id": "channel24",
+                    "source_name": "চ্যানেল ২৪",
+                    "source_badge": "Channel 24",
+                    "source_color": "#0284c7",
+                    "image": img
+                })
     except Exception:
         pass
 
-    # 4. RTV via RSS
+    # 4. NTV News (Live Official Feed with Real News Images)
     try:
-        req = urllib.request.Request("https://news.google.com/rss/search?q=site:rtvonline.com&hl=bn&gl=BD&ceid=BD:bn", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=3) as r:
-            soup = BeautifulSoup(r.read(), 'xml')
-            for it in soup.find_all('item')[:15]:
-                raw_t = it.find('title').text
-                t = re.sub(r'\s*-\s*(RTV|Rtvonline).*$', '', raw_t, flags=re.I).strip()
-                l = it.find('link').text
-                if len(t) > 20 and not t.startswith('RTV'):
-                    news.append({
-                        "id": l,
-                        "title": t,
-                        "link": l,
-                        "timestamp": time.time(),
-                        "category": detect_cat(t, l),
-                        "source_id": "rtv",
-                        "source_name": "আরটিভি",
-                        "source_badge": "RTV",
-                        "source_color": "#ea580c",
-                        "image": "https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=600&auto=format&fit=crop&q=80"
-                    })
+        req = urllib.request.Request("https://www.youtube.com/feeds/videos.xml?channel_id=UCUDQdVsKssximyFwg4IxnOQ", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            root = ET.fromstring(r.read())
+            for entry in root.findall('{http://www.w3.org/2005/Atom}entry')[:15]:
+                t = entry.find('{http://www.w3.org/2005/Atom}title').text.strip()
+                l = entry.find('{http://www.w3.org/2005/Atom}link').attrib.get('href', '')
+                media_group = entry.find('{http://search.yahoo.com/mrss/}group')
+                thumb = media_group.find('{http://search.yahoo.com/mrss/}thumbnail')
+                img = thumb.attrib.get('url', '') if thumb is not None else ''
+                if not is_clean_headline(t): continue
+                news.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now,
+                    "category": detect_cat(t),
+                    "source_id": "ntv",
+                    "source_name": "এনটিভি",
+                    "source_badge": "NTV",
+                    "source_color": "#16a34a",
+                    "image": img
+                })
+    except Exception:
+        pass
+
+    # 5. RTV (Live Official Feed with Real News Images)
+    try:
+        req = urllib.request.Request("https://www.youtube.com/feeds/videos.xml?channel_id=UC2P5Fd5g41Gtdqf0Uzh8Qaw", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            root = ET.fromstring(r.read())
+            for entry in root.findall('{http://www.w3.org/2005/Atom}entry')[:15]:
+                t = entry.find('{http://www.w3.org/2005/Atom}title').text.strip()
+                l = entry.find('{http://www.w3.org/2005/Atom}link').attrib.get('href', '')
+                media_group = entry.find('{http://search.yahoo.com/mrss/}group')
+                thumb = media_group.find('{http://search.yahoo.com/mrss/}thumbnail')
+                img = thumb.attrib.get('url', '') if thumb is not None else ''
+                if not is_clean_headline(t): continue
+                news.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now,
+                    "category": detect_cat(t),
+                    "source_id": "rtv",
+                    "source_name": "আরটিভি",
+                    "source_badge": "RTV",
+                    "source_color": "#ea580c",
+                    "image": img
+                })
+    except Exception:
+        pass
+
+    # Fallback to local high quality cached news if live fetch count is low
+    try:
+        with open(os.path.join(os.path.dirname(__file__), '../public/initial_news.json'), 'r', encoding='utf-8') as f:
+            cached = json.load(f)
+            current_links = set(it['link'] for it in news)
+            for it in cached:
+                if it['link'] not in current_links and 'unsplash' not in it.get('image', ''):
+                    news.append(it)
     except Exception:
         pass
 
@@ -202,21 +244,15 @@ def get_article(url: str = Query(...)):
         pass
     return {"title": title, "paragraphs": paras[:10]}
 
-# High-Quality Bengali Sweet Female Voice Reader API (Nabanita Neural)
 @app.get("/api/tts")
 async def tts_stream(text: str = Query(...)):
-    # Clean text: remove URLs, English slugs, extra symbols
     clean = re.sub(r'https?://\S+', '', text)
     clean = re.sub(r'www\.\S+', '', clean)
     clean = re.sub(r'[a-zA-Z0-9_\-\.\/]{10,}', '', clean).strip()
+    if len(clean) > 800: clean = clean[:800]
     
-    # Cap text length for fast streaming
-    if len(clean) > 800:
-        clean = clean[:800]
-    
-    # Use sweet female voice: bn-BD-NabanitaNeural
     voice = "bn-BD-NabanitaNeural"
-    communicate = edge_tts.Communicate(clean, voice, rate="+2%", pitch="+1Hz")
+    communicate = edge_tts.Communicate(clean, voice, rate="+25%", pitch="+1Hz")
     audio_data = b""
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
