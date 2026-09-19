@@ -1689,15 +1689,19 @@
 
       <div id="loginErrorMsg" style="display: none; padding: 12px 14px; border-radius: 10px; font-size: 13.5px; line-height: 1.5; background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; margin-bottom: 18px; font-weight: 600;"></div>
 
-      <form onsubmit="handleAdminLoginSubmit(event)" style="display: flex; flex-direction: column; gap: 16px; margin: 0;">
+      <form id="adminFullLoginForm" onsubmit="handleAdminLoginSubmit(event)" autocomplete="off" style="display: flex; flex-direction: column; gap: 16px; margin: 0;">
+        <!-- Hidden decoy inputs to trick browser and mobile autofill engines -->
+        <input type="text" style="display:none!important;" name="decoy_user" tabindex="-1" autocomplete="off">
+        <input type="password" style="display:none!important;" name="decoy_pass" tabindex="-1" autocomplete="off">
+
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <label for="adminUsernameInput" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">এডমিন আইডি <span style="color:#e11d48;">*</span></label>
-          <input type="text" id="adminUsernameInput" placeholder="আপনার এডমিন আইডি লিখুন" required autocomplete="username" style="width: 100%; box-sizing: border-box; padding: 13px 14px; font-size: 15px; border-radius: 10px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+          <input type="text" id="adminUsernameInput" name="adm_id_no_fill" placeholder="আপনার এডমিন আইডি লিখুন" required autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" style="width: 100%; box-sizing: border-box; padding: 13px 14px; font-size: 15px; border-radius: 10px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <label for="adminPasswordInput" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">পাসওয়ার্ড <span style="color:#e11d48;">*</span></label>
-          <input type="password" id="adminPasswordInput" placeholder="গোপন পাসওয়ার্ড লিখুন" required autocomplete="current-password" style="width: 100%; box-sizing: border-box; padding: 13px 14px; font-size: 15px; border-radius: 10px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+          <input type="password" id="adminPasswordInput" name="adm_pwd_no_fill" placeholder="গোপন পাসওয়ার্ড লিখুন" required autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" style="width: 100%; box-sizing: border-box; padding: 13px 14px; font-size: 15px; border-radius: 10px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
         </div>
 
         <button type="submit" style="width: 100%; background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); color: #ffffff; border: none; border-radius: 10px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.3); margin-top: 6px;">
@@ -2328,6 +2332,9 @@
         if (isAdminLoggedIn()) {
           switchPage('admin');
           return;
+        }
+        if (typeof clearAdminLoginForm === 'function') {
+          clearAdminLoginForm();
         }
         if (loginView) loginView.style.display = 'block';
         if (catSection) catSection.style.display = 'none';
@@ -3643,8 +3650,27 @@
       }
     }
 
+    
+    function clearAdminLoginForm() {
+      const uInput = document.getElementById('adminUsernameInput');
+      const pInput = document.getElementById('adminPasswordInput');
+      const err = document.getElementById('loginErrorMsg');
+      const form = document.getElementById('adminFullLoginForm');
+      if (form) form.reset();
+      if (uInput) {
+        uInput.value = '';
+        uInput.setAttribute('value', '');
+      }
+      if (pInput) {
+        pInput.value = '';
+        pInput.setAttribute('value', '');
+      }
+      if (err) err.style.display = 'none';
+    }
+
     function confirmAdminLogoutExecute() {
       closeAdminLogoutModal();
+      clearAdminLoginForm();
       localStorage.removeItem('newsbangla_admin_auth');
       checkAdminAuthOnLoad();
       switchPage('news');
