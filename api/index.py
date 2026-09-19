@@ -401,12 +401,12 @@ def read_persisted_visitor_stats():
             pass
 
     return {
-        "total_pageviews": 1420,
-        "month_pageviews": 430,
-        "year_pageviews": 1420,
-        "total_unique": 860,
-        "month_unique": 290,
-        "year_unique": 860,
+        "total_pageviews": 0,
+        "month_pageviews": 0,
+        "year_pageviews": 0,
+        "total_unique": 0,
+        "month_unique": 0,
+        "year_unique": 0,
         "current_month": time.strftime("%Y-%m"),
         "current_year": time.strftime("%Y"),
         "ip_hash_set": []
@@ -526,12 +526,12 @@ def get_visitor_stats():
     return {
         "status": "success",
         "stats": {
-            "total_pageviews": stats.get("total_pageviews", 1420),
-            "month_pageviews": stats.get("month_pageviews", 430),
-            "year_pageviews": stats.get("year_pageviews", 1420),
-            "total_unique": stats.get("total_unique", 860),
-            "month_unique": stats.get("month_unique", 290),
-            "year_unique": stats.get("year_unique", 860),
+            "total_pageviews": stats.get("total_pageviews", 0),
+            "month_pageviews": stats.get("month_pageviews", 0),
+            "year_pageviews": stats.get("year_pageviews", 0),
+            "total_unique": stats.get("total_unique", 0),
+            "month_unique": stats.get("month_unique", 0),
+            "year_unique": stats.get("year_unique", 0),
             "current_month": stats.get("current_month", time.strftime("%Y-%m")),
             "current_year": stats.get("current_year", time.strftime("%Y"))
         }
