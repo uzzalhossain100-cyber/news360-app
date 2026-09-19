@@ -1250,6 +1250,33 @@
     @media (max-width: 768px) {
       .header-inner {
         flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 12px;
+      }
+      .header-actions {
+        gap: 6px;
+        margin-left: auto;
+      }
+      .download-apk-btn {
+        padding: 5px 10px;
+        font-size: 11.5px;
+        gap: 4px;
+      }
+      .refresh-text-btn {
+        padding: 5px 10px;
+        font-size: 11.5px;
+        gap: 4px;
+      }
+      .btn-icon {
+        width: 32px;
+        height: 32px;
+      }
+      .login-nav-btn {
+        padding: 5px 10px;
+        font-size: 11.5px;
+        gap: 4px;
+        white-space: nowrap;
+        flex-shrink: 0;
       }
       .search-wrapper {
         order: 4;
@@ -3189,11 +3216,28 @@
     }
 
     function handleAdminLogout() {
-      if (confirm('আপনি কি এডমিন প্যানেল থেকে লগআউট করতে চান?')) {
-        localStorage.removeItem('newsbangla_admin_auth');
-        checkAdminAuthOnLoad();
-        switchPage('news');
+      const modal = document.getElementById('adminLogoutConfirmModal');
+      if (modal) {
+        modal.style.display = 'flex';
+      } else {
+        // Fallback
+        confirmAdminLogoutExecute();
       }
+    }
+
+    function closeAdminLogoutModal() {
+      const modal = document.getElementById('adminLogoutConfirmModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    function confirmAdminLogoutExecute() {
+      closeAdminLogoutModal();
+      localStorage.removeItem('newsbangla_admin_auth');
+      checkAdminAuthOnLoad();
+      switchPage('news');
+      showToast('✓ এডমিন প্যানেল থেকে সফলভাবে লগআউট হয়েছে');
     }
 
     function toggleNewNewsForm() {
@@ -3584,5 +3628,23 @@
       </form>
     </div>
   </div>
+
+  <!-- Custom In-App Logout Confirmation Modal (Works 100% reliably on Android WebView and Browsers) -->
+  <div id="adminLogoutConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px);">
+    <div style="background: var(--bg-card, #ffffff); border-radius: 20px; max-width: 380px; width: 100%; padding: 26px 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid var(--border-color, #e2e8f0); animation: modalFadeIn 0.2s ease;">
+      <div style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+        </svg>
+      </div>
+      <h3 style="font-size: 18px; font-weight: 800; color: var(--text-main, #0f172a); margin-bottom: 8px;">এডমিন লগআউট</h3>
+      <p style="font-size: 13.5px; color: var(--text-muted, #64748b); line-height: 1.5; margin-bottom: 22px;">আপনি কি এডমিন প্যানেল থেকে নিশ্চিতভাবে লগআউট করতে চান?</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button type="button" onclick="closeAdminLogoutModal()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: var(--text-main, #334155); font-weight: 700; font-size: 13.5px; cursor: pointer;">না, বাতিল</button>
+        <button type="button" onclick="confirmAdminLogoutExecute()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);">হ্যাঁ, লগআউট</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
