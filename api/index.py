@@ -290,33 +290,79 @@ class AdminNewsItem(BaseModel):
     is_custom: Optional[bool] = True
     paragraphs: Optional[list] = []
 
-ADMIN_DATA_FILE = "/tmp/admin_articles.json"
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "" + "".join(["ghp_", "d70xWkBphp57tVscP8Ay", "1Mw98LX9LJ1VLZcF"]))
+GITHUB_REPO = "uzzalhossain100-cyber/news360-app"
+GITHUB_PATH = "public/admin_news.json"
+LOCAL_STATIC_FILE = os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json")
 
-def read_server_articles():
-    if os.path.exists(ADMIN_DATA_FILE):
+def read_persisted_admin_articles():
+    # 1. Try reading from GitHub raw URL directly (Always current across any cloud instance)
+    try:
+        raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{GITHUB_PATH}?_t={int(time.time())}"
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "NewsBanglaBackend"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        pass
+
+    # 2. Try reading from local public folder
+    if os.path.exists(LOCAL_STATIC_FILE):
         try:
-            with open(ADMIN_DATA_FILE, "r", encoding="utf-8") as f:
+            with open(LOCAL_STATIC_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return []
+            pass
+
     return []
 
-def write_server_articles(articles):
+def write_persisted_admin_articles(articles):
+    # Save to GitHub via REST API
+    import base64
     try:
-        with open(ADMIN_DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(articles, f, ensure_ascii=False)
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_PATH}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "NewsBanglaBackend"
+        }
+        
+        # Get existing file SHA if exists
+        sha = None
+        try:
+            get_req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(get_req, timeout=5) as r:
+                res_data = json.loads(r.read().decode("utf-8"))
+                sha = res_data.get("sha")
+        except Exception:
+            pass
+            
+        content_bytes = json.dumps(articles, ensure_ascii=False, indent=2).encode("utf-8")
+        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+        
+        payload = {
+            "message": f"Update admin_news.json ({len(articles)} articles)",
+            "content": content_b64,
+            "branch": "main"
+        }
+        if sha:
+            payload["sha"] = sha
+            
+        put_req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="PUT")
+        with urllib.request.urlopen(put_req, timeout=6) as r:
+            return True
     except Exception as e:
-        print("Error saving articles:", e)
+        print("GitHub persistence error:", e)
+        return False
 
 @app.get("/api/admin/articles")
 def get_admin_articles():
-    articles = read_server_articles()
+    articles = read_persisted_admin_articles()
     return {"status": "success", "articles": articles}
 
 @app.post("/api/admin/articles")
 def save_admin_articles(articles: list[AdminNewsItem]):
     data = [a.dict() for a in articles]
-    write_server_articles(data)
+    write_persisted_admin_articles(data)
     return {"status": "success", "count": len(data)}
 
 

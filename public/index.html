@@ -3291,33 +3291,64 @@
     }
 
     async function fetchCustomArticlesFromServer() {
+      let articlesList = null;
+
+      // 1. Try reading directly from /admin_news.json static CDN first (lightning fast on all devices)
       try {
-        const resp = await fetch('/api/admin/articles?_t=' + Date.now());
-        if (resp.ok) {
-          const res = await resp.json();
-          if (res && res.status === 'success' && Array.isArray(res.articles)) {
-            const localArticles = getAdminCustomArticles();
-            const serverArticles = res.articles;
-            // Merge by unique article id, keeping newest
-            const articleMap = new Map();
-            localArticles.forEach(a => { if (a && a.id) articleMap.set(a.id, a); });
-            serverArticles.forEach(a => { if (a && a.id) articleMap.set(a.id, a); });
-            
-            const merged = Array.from(articleMap.values());
-            merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            localStorage.setItem('newsbangla_custom_articles', JSON.stringify(merged));
-            
-            // Re-integrate and re-render
-            integrateCustomArticles();
-            renderNewsGrid();
-            updateTicker();
-            if (activePage === 'admin') {
-              renderAdminNewsList();
-            }
+        const staticResp = await fetch('/admin_news.json?_t=' + Date.now());
+        if (staticResp.ok) {
+          const sData = await staticResp.json();
+          if (Array.isArray(sData)) {
+            articlesList = sData;
           }
         }
-      } catch (e) {
-        console.warn('Fetch server articles error:', e);
+      } catch (e) {}
+
+      // 2. Fallback to serverless API
+      if (!articlesList) {
+        try {
+          const resp = await fetch('/api/admin/articles?_t=' + Date.now());
+          if (resp.ok) {
+            const res = await resp.json();
+            if (res && res.status === 'success' && Array.isArray(res.articles)) {
+              articlesList = res.articles;
+            }
+          }
+        } catch (e) {
+          console.warn('Fetch server articles error:', e);
+        }
+      }
+
+      // 3. Fallback to GitHub raw file directly (100% reachable from any browser globally)
+      if (!articlesList) {
+        try {
+          const ghResp = await fetch('https://raw.githubusercontent.com/uzzalhossain100-cyber/news360-app/main/public/admin_news.json?_t=' + Date.now());
+          if (ghResp.ok) {
+            const ghData = await ghResp.json();
+            if (Array.isArray(ghData)) {
+              articlesList = ghData;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (Array.isArray(articlesList)) {
+        const localArticles = getAdminCustomArticles();
+        const articleMap = new Map();
+        localArticles.forEach(a => { if (a && a.id) articleMap.set(a.id, a); });
+        articlesList.forEach(a => { if (a && a.id) articleMap.set(a.id, a); });
+        
+        const merged = Array.from(articleMap.values());
+        merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        localStorage.setItem('newsbangla_custom_articles', JSON.stringify(merged));
+        
+        // Re-integrate and re-render
+        integrateCustomArticles();
+        renderNewsGrid();
+        updateTicker();
+        if (activePage === 'admin') {
+          renderAdminNewsList();
+        }
       }
     }
 
