@@ -1427,24 +1427,24 @@
     }
 
   </style>
+  <link rel="icon" type="image/png" href="/app_icon.png">
+  <link rel="apple-touch-icon" href="/app_icon.png">
 </head>
 <body>
 
   <!-- Top Sticky Header -->
   <header>
     <div class="header-inner">
-      <div class="brand" onclick="switchPage('news'); selectCategory('all');">
-        <div class="brand-icon" style="background: linear-gradient(135deg, #e11d48 0%, #b91c1c 100%); box-shadow: 0 4px 12px rgba(225,29,72,0.35);">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-            <path d="M18 14h-8"></path>
-            <path d="M15 18h-5"></path>
-            <path d="M10 6h8v4h-8V6Z"></path>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <h1>News<span style="color:#e11d48;">Bangla</span> <span class="badge-live">লাইভ</span></h1>
-          <span style="font-size:11px; font-weight:700; color:var(--text-muted); display:block; margin-top:-3px; letter-spacing:0.4px;">নিউজ বাংলা ২৪/৭</span>
+      <div class="brand" onclick="switchPage('news'); selectCategory('all');" style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
+        <img src="/logo_emblem.png" alt="NewsBangla Logo" style="height: 44px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12));">
+        <div class="brand-text" style="display: flex; flex-direction: column; justify-content: center;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <h1 style="font-size: 21px; font-weight: 900; margin: 0; line-height: 1.1; letter-spacing: -0.2px;">
+              <span style="color: #00509d;">নিউজ</span><span style="color: #d90429;">বাংলা</span>
+            </h1>
+            <span class="badge-live" style="background: #d90429; color: white; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">লাইভ</span>
+          </div>
+          <span style="font-size: 11px; font-weight: 800; color: #1e3a8a; display: block; margin-top: 1px; letter-spacing: 0.5px;">NewsBangla &bull; <span style="font-size: 9.5px; font-weight: 600; color: var(--text-muted);">সত্যের সন্ধানে, অবিচল পথচলা</span></span>
         </div>
       </div>
 
