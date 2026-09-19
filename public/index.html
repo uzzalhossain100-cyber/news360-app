@@ -1526,14 +1526,14 @@
 
           <!-- Phone Field (No example) -->
           <div style="display: flex; flex-direction: column; gap: 6px;">
-            <label for="contactPhone" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">মোবাইল নাম্বার <span style="color:#e11d48;">*</span></label>
-            <input type="tel" id="contactPhone" class="contact-input-field" placeholder="মোবাইল নাম্বার লিখুন" required autocomplete="tel" style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); outline: none; font-family: inherit;">
+            <label for="contactPhone" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">মোবাইল নাম্বার (১১ ডিজিট) <span style="color:#e11d48;">*</span></label>
+            <input type="tel" id="contactPhone" class="contact-input-field" placeholder="১১ ডিজিটের মোবাইল নাম্বার লিখুন" required maxlength="11" pattern="[0-9]{11}" inputmode="numeric" style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); outline: none; font-family: inherit;">
           </div>
 
           <!-- Email Field (No example, optional) -->
           <div style="display: flex; flex-direction: column; gap: 6px;">
-            <label for="contactEmail" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">আপনার ইমেইল (ঐচ্ছিক)</label>
-            <input type="email" id="contactEmail" class="contact-input-field" placeholder="ইমেইল ঠিকানা লিখুন" autocomplete="email" style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); outline: none; font-family: inherit;">
+            <label for="contactEmail" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">আপনার ইমেইল আইডি <span style="color:#e11d48;">*</span></label>
+            <input type="email" id="contactEmail" class="contact-input-field" placeholder="সঠিক ইমেইল আইডি লিখুন" required autocomplete="email" style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); outline: none; font-family: inherit;">
           </div>
 
           <!-- Message Field: Substantially enlarged (min-height: 260px, no example) -->
@@ -1774,8 +1774,34 @@
       const alertSuccess = document.getElementById('formAlertSuccess');
       const alertError = document.getElementById('formAlertError');
 
-      if (!name || !phone || !userMessage) {
-        alert('অনুগ্রহ করে আপনার নাম, মোবাইল নাম্বার ও মেসেজ লিখুন।');
+      if (!name) {
+        alert('অনুগ্রহ করে আপনার নাম লিখুন।');
+        document.getElementById('contactName').focus();
+        return;
+      }
+
+      // Convert any Bengali numerals in phone to English digits
+      const bnToEnMap = {'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
+      const normalizedPhone = phone.replace(/[০-৯]/g, function(d) { return bnToEnMap[d] || d; }).replace(/\s+/g, '');
+
+      // Strict 11-digit phone number validation
+      if (!/^\d{11}$/.test(normalizedPhone)) {
+        alert('মোবাইল নাম্বার অবশ্যই ঠিক ১১ ডিজিটের হতে হবে (যেমন: 01XXXXXXXXX)।');
+        document.getElementById('contactPhone').focus();
+        return;
+      }
+
+      // Strict full email validation check
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!email || !emailRegex.test(email)) {
+        alert('অনুগ্রহ করে একটি সম্পূর্ণ ও সঠিক ইমেইল আইডি লিখুন (যেমন: name@gmail.com)।');
+        document.getElementById('contactEmail').focus();
+        return;
+      }
+
+      if (!userMessage || userMessage.length < 5) {
+        alert('অনুগ্রহ করে আপনার মেসেজ বা বার্তাটি বিস্তারিত লিখুন।');
+        document.getElementById('contactMessage').focus();
         return;
       }
 
@@ -1799,7 +1825,7 @@
           },
           body: JSON.stringify({
             name: name,
-            phone: phone,
+            phone: normalizedPhone,
             email: email,
             message: userMessage
           })
@@ -1825,7 +1851,7 @@
             _template: 'table',
             _captcha: 'false',
             name: name,
-            phone: phone,
+            phone: normalizedPhone,
             email: email,
             message: fullFormattedMessage
           })
