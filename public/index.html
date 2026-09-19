@@ -1639,35 +1639,7 @@
       </div>
     </div>
   
-  <!-- Admin Login Modal -->
-  <div id="adminLoginModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:999999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
-    <div style="background:var(--bg-card, #ffffff); border-radius:18px; padding:28px 24px; max-width:380px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,0.25); border:1px solid var(--border-color, #e2e8f0); position:relative; box-sizing:border-box;">
-      <button onclick="closeAdminLoginModal()" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:22px; line-height:1;">&times;</button>
-      <div style="text-align:center; margin-bottom:20px;">
-        <div style="width:52px; height:52px; border-radius:50%; background:#fee2e2; color:#e11d48; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
-          <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-          </svg>
-        </div>
-        <h3 style="font-size:20px; font-weight:800; color:var(--text-main); margin:0 0 4px;">এডমিন লগইন</h3>
-        <p style="font-size:13px; color:var(--text-muted); margin:0;">সংবাদ প্রকাশ ও ব্যবস্থাপনার জন্য লগিন করুন</p>
-      </div>
-
-      <div id="loginErrorMsg" style="display:none; padding:10px 12px; border-radius:8px; font-size:13px; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; margin-bottom:14px; font-weight:600;"></div>
-
-      <form onsubmit="handleAdminLoginSubmit(event)" style="display:flex; flex-direction:column; gap:14px; margin:0;">
-        <div>
-          <label style="display:block; font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:5px;">এডমিন আইডি</label>
-          <input type="text" id="adminUsernameInput" placeholder="এডমিন আইডি লিখুন" required autocomplete="username" style="width:100%; box-sizing:border-box; padding:11px 13px; font-size:14px; border-radius:8px; border:1.5px solid var(--border-color, #cbd5e1); background:var(--bg-primary, #f8fafc); color:var(--text-main); outline:none;">
-        </div>
-        <div>
-          <label style="display:block; font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:5px;">পাসওয়ার্ড</label>
-          <input type="password" id="adminPasswordInput" placeholder="পাসওয়ার্ড লিখুন" required autocomplete="current-password" style="width:100%; box-sizing:border-box; padding:11px 13px; font-size:14px; border-radius:8px; border:1.5px solid var(--border-color, #cbd5e1); background:var(--bg-primary, #f8fafc); color:var(--text-main); outline:none;">
-        </div>
-        <button type="submit" style="width:100%; background:linear-gradient(135deg, #e11d48 0%, #be123c 100%); color:white; border:none; border-radius:9px; padding:12px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(225,29,72,0.3); margin-top:4px;">লগিন করুন</button>
-      </form>
-    </div>
-  </div>
+  
 
   <!-- Admin Panel View Container (এডমিন প্যানেল পেজ) -->
   <main id="adminPageView" style="display: none; padding: 24px 14px 60px;">
@@ -1781,8 +1753,6 @@
     </div>
   </main>
 
-
-  </main>
 
   <!-- Fixed Bottom Sticky Newspaper Bar (স্ক্রিনের নিচে ফিক্সড থাকবে) -->
   <div class="fixed-bottom-bar" id="fixedBottomBar">
@@ -3082,17 +3052,24 @@
     }
 
     function openAdminLoginModal() {
-      const modal = document.getElementById('adminLoginModal');
+      let modal = document.getElementById('adminLoginModal');
       const errorMsg = document.getElementById('loginErrorMsg');
-      if (modal) modal.style.display = 'flex';
-      if (errorMsg) errorMsg.style.display = 'none';
-      const userIn = document.getElementById('adminUsernameInput');
-      if (userIn) userIn.focus();
+      if (modal) {
+        modal.style.setProperty('display', 'flex', 'important');
+        modal.style.zIndex = '2147483647';
+        if (errorMsg) errorMsg.style.display = 'none';
+        setTimeout(() => {
+          const userIn = document.getElementById('adminUsernameInput');
+          if (userIn) userIn.focus();
+        }, 100);
+      }
     }
 
     function closeAdminLoginModal() {
       const modal = document.getElementById('adminLoginModal');
-      if (modal) modal.style.display = 'none';
+      if (modal) {
+        modal.style.setProperty('display', 'none', 'important');
+      }
     }
 
     function handleAdminLoginSubmit(e) {
@@ -3360,5 +3337,35 @@
     })();
   </script>
 
+
+  <!-- Admin Login Modal -->
+  <div id="adminLoginModal" onclick="if(event.target===this)closeAdminLoginModal()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:999999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:var(--bg-card, #ffffff); border-radius:18px; padding:28px 24px; max-width:380px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,0.25); border:1px solid var(--border-color, #e2e8f0); position:relative; box-sizing:border-box;">
+      <button onclick="closeAdminLoginModal()" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:22px; line-height:1;">&times;</button>
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="width:52px; height:52px; border-radius:50%; background:#fee2e2; color:#e11d48; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
+          <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+        </div>
+        <h3 style="font-size:20px; font-weight:800; color:var(--text-main); margin:0 0 4px;">এডমিন লগইন</h3>
+        <p style="font-size:13px; color:var(--text-muted); margin:0;">সংবাদ প্রকাশ ও ব্যবস্থাপনার জন্য লগিন করুন</p>
+      </div>
+
+      <div id="loginErrorMsg" style="display:none; padding:10px 12px; border-radius:8px; font-size:13px; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; margin-bottom:14px; font-weight:600;"></div>
+
+      <form onsubmit="handleAdminLoginSubmit(event)" style="display:flex; flex-direction:column; gap:14px; margin:0;">
+        <div>
+          <label style="display:block; font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:5px;">এডমিন আইডি</label>
+          <input type="text" id="adminUsernameInput" placeholder="এডমিন আইডি লিখুন" required autocomplete="username" style="width:100%; box-sizing:border-box; padding:11px 13px; font-size:14px; border-radius:8px; border:1.5px solid var(--border-color, #cbd5e1); background:var(--bg-primary, #f8fafc); color:var(--text-main); outline:none;">
+        </div>
+        <div>
+          <label style="display:block; font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:5px;">পাসওয়ার্ড</label>
+          <input type="password" id="adminPasswordInput" placeholder="পাসওয়ার্ড লিখুন" required autocomplete="current-password" style="width:100%; box-sizing:border-box; padding:11px 13px; font-size:14px; border-radius:8px; border:1.5px solid var(--border-color, #cbd5e1); background:var(--bg-primary, #f8fafc); color:var(--text-main); outline:none;">
+        </div>
+        <button type="submit" style="width:100%; background:linear-gradient(135deg, #e11d48 0%, #be123c 100%); color:white; border:none; border-radius:9px; padding:12px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(225,29,72,0.3); margin-top:4px;">লগিন করুন</button>
+      </form>
+    </div>
+  </div>
 </body>
 </html>
