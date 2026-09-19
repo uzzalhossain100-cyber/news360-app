@@ -2257,6 +2257,7 @@
       // Check and reflect admin auth status on page load immediately
       checkAdminAuthOnLoad();
       integrateCustomArticles();
+      fetchCustomArticlesFromServer();
 
       startAutoRefreshTimer();
       loadNews();
@@ -3229,6 +3230,51 @@
 
     function saveAdminCustomArticles(articles) {
       localStorage.setItem('newsbangla_custom_articles', JSON.stringify(articles));
+      // Cross-device server sync: save to server so all PCs and mobiles see it
+      syncCustomArticlesToServer(articles);
+    }
+
+    async function syncCustomArticlesToServer(articles) {
+      try {
+        await fetch('/api/admin/articles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(articles || [])
+        });
+      } catch (e) {
+        console.warn('Server sync error:', e);
+      }
+    }
+
+    async function fetchCustomArticlesFromServer() {
+      try {
+        const resp = await fetch('/api/admin/articles?_t=' + Date.now());
+        if (resp.ok) {
+          const res = await resp.json();
+          if (res && res.status === 'success' && Array.isArray(res.articles)) {
+            const localArticles = getAdminCustomArticles();
+            const serverArticles = res.articles;
+            // Merge by unique article id, keeping newest
+            const articleMap = new Map();
+            localArticles.forEach(a => { if (a && a.id) articleMap.set(a.id, a); });
+            serverArticles.forEach(a => { if (a && a.id) articleMap.set(a.id, a); });
+            
+            const merged = Array.from(articleMap.values());
+            merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            localStorage.setItem('newsbangla_custom_articles', JSON.stringify(merged));
+            
+            // Re-integrate and re-render
+            integrateCustomArticles();
+            renderNewsGrid();
+            updateTicker();
+            if (activePage === 'admin') {
+              renderAdminNewsList();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Fetch server articles error:', e);
+      }
     }
 
     let editingArticleId = null;

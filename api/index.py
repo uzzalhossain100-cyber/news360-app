@@ -270,6 +270,56 @@ async def tts_stream(text: str = Query(...)):
 
 from pydantic import BaseModel
 
+
+# ----------------------------------------------------
+# Global In-Memory / File-based Admin Custom Articles
+# ----------------------------------------------------
+class AdminNewsItem(BaseModel):
+    id: str
+    title: str
+    link: str
+    timestamp: int
+    category: str
+    source_id: str
+    source_name: str
+    source_badge: str
+    source_color: str
+    image: Optional[str] = ""
+    time_ago: Optional[str] = "এইমাত্র"
+    hidden: Optional[bool] = False
+    is_custom: Optional[bool] = True
+    paragraphs: Optional[list] = []
+
+ADMIN_DATA_FILE = "/tmp/admin_articles.json"
+
+def read_server_articles():
+    if os.path.exists(ADMIN_DATA_FILE):
+        try:
+            with open(ADMIN_DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def write_server_articles(articles):
+    try:
+        with open(ADMIN_DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(articles, f, ensure_ascii=False)
+    except Exception as e:
+        print("Error saving articles:", e)
+
+@app.get("/api/admin/articles")
+def get_admin_articles():
+    articles = read_server_articles()
+    return {"status": "success", "articles": articles}
+
+@app.post("/api/admin/articles")
+def save_admin_articles(articles: list[AdminNewsItem]):
+    data = [a.dict() for a in articles]
+    write_server_articles(data)
+    return {"status": "success", "count": len(data)}
+
+
 class ContactMessageRequest(BaseModel):
     name: str
     phone: str
