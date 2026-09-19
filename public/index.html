@@ -1435,6 +1435,7 @@
           </svg>
           যোগাযোগ
         </button>
+        <!-- Admin Panel Menu Item (Shown right next to যোগাযোগ when admin is logged in) -->
         <button class="nav-tab-btn" id="tabAdmin" onclick="switchPage('admin')" style="display: none; background: #fff1f2; border-color: #fecdd3; color: #e11d48; font-weight: 700;">
           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
@@ -1442,6 +1443,12 @@
           </svg>
           এডমিন প্যানেল
         </button>
+        
+        
+        
+        
+        
+        
       </nav>
 
       <div class="search-wrapper" id="topSearchWrapper">
@@ -1708,7 +1715,8 @@
           <svg width="22" height="22" fill="none" stroke="#e11d48" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
           </svg>
-          নতুন খবর প্রকাশ করুন
+          <span id="adminFormHeadingText">নতুন খবর প্রকাশ করুন</span>
+          <button type="button" id="adminCancelEditBtn" onclick="resetAdminForm()" style="display:none; margin-left:auto; background:#f1f5f9; border:1px solid #cbd5e1; color:#475569; padding:4px 12px; border-radius:6px; font-size:12px; cursor:pointer;">বাতিল করুন</button>
         </div>
 
         <form id="adminNewArticleForm" onsubmit="handlePublishArticle(event)" style="display: flex; flex-direction: column; gap: 16px; margin: 0;">
@@ -2552,9 +2560,13 @@
       const tickerContainer = document.getElementById('tickerContent');
       if (!tickerContainer) return;
 
-      // Select top 15 clean breaking news items (filtering out program schedules/bulletins)
-      const cleanNews = allNewsItems.filter(it => !isNonNewsHeadline(it.title));
-      const topItems = cleanNews.slice(0, 15);
+      // Extract active custom published news first (always featured prominently in breaking news)
+      const customArticles = getAdminCustomArticles().filter(it => !it.hidden);
+      const regularClean = allNewsItems.filter(it => !it.is_custom && !isNonNewsHeadline(it.title));
+      
+      // Combine: custom published news at the very front of the ticker
+      const combinedTickerList = customArticles.concat(regularClean);
+      const topItems = combinedTickerList.slice(0, 20);
       let itemsHtml = '';
 
       function buildItems(list) {
@@ -3084,18 +3096,25 @@
     function checkAdminAuthOnLoad() {
       const isAuth = isAdminLoggedIn();
       const tabAdmin = document.getElementById('tabAdmin');
+      const navAuthBtn = document.getElementById('navAuthBtn');
       const navAuthBtnText = document.getElementById('navAuthBtnText');
+      
+      // When logged in, show 'এডমিন প্যানেল' tab right next to 'যোগাযোগ'
       if (tabAdmin) {
         tabAdmin.style.display = isAuth ? 'inline-flex' : 'none';
       }
+      // Update top button text: if logged in, offer quick access / logout
       if (navAuthBtnText) {
-        navAuthBtnText.innerText = isAuth ? 'এডমিন প্যানেল' : 'লগিন করুন';
+        navAuthBtnText.innerText = isAuth ? 'এডমিন (লগআউট)' : 'লগিন করুন';
+      }
+      if (navAuthBtn) {
+        navAuthBtn.title = isAuth ? 'এডমিন লগআউট করুন' : 'এডমিন লগিন করুন';
       }
     }
 
     function handleNavAuthClick() {
       if (isAdminLoggedIn()) {
-        switchPage('admin');
+        handleAdminLogout();
       } else {
         switchPage('login');
       }
@@ -3185,6 +3204,28 @@
       localStorage.setItem('newsbangla_custom_articles', JSON.stringify(articles));
     }
 
+    let editingArticleId = null;
+
+    function resetAdminForm() {
+      editingArticleId = null;
+      document.getElementById('adminNewArticleForm').reset();
+      currentAdminUploadedBase64Image = '';
+      const previewWrap = document.getElementById('adminImagePreviewWrap');
+      if (previewWrap) previewWrap.style.display = 'none';
+      const formHeading = document.getElementById('adminFormHeadingText');
+      if (formHeading) formHeading.innerText = 'নতুন খবর প্রকাশ করুন';
+      const publishBtn = document.getElementById('adminPublishBtn');
+      if (publishBtn) publishBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg> খবরটি সাবমিট ও প্রকাশ করুন';
+      const cancelBtn = document.getElementById('adminCancelEditBtn');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+
+      // Set default datetime to now
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      const dtInput = document.getElementById('adminArticleDateTime');
+      if (dtInput) dtInput.value = now.toISOString().slice(0, 16);
+    }
+
     function handlePublishArticle(e) {
       e.preventDefault();
       const title = document.getElementById('adminArticleTitle').value.trim();
@@ -3199,7 +3240,7 @@
         return;
       }
 
-      // Compute publication timestamp
+      // Compute exact publication timestamp based on selected date & time
       let pubTimestamp = Math.floor(Date.now() / 1000);
       if (dateTimeVal) {
         const dt = new Date(dateTimeVal);
@@ -3209,42 +3250,91 @@
       }
 
       const chosenImage = currentAdminUploadedBase64Image || urlImg || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80';
-      const articleId = 'custom_' + Date.now();
-
-      const newArticle = {
-        id: articleId,
-        title: title,
-        link: 'https://newsbangla.vercel.app/article/' + articleId,
-        timestamp: pubTimestamp,
-        category: category,
-        source_id: 'newsbangla',
-        source_name: source,
-        source_badge: source,
-        source_color: '#e11d48',
-        image: chosenImage,
-        time_ago: 'এইমাত্র',
-        hidden: false,
-        is_custom: true,
-        paragraphs: content.split('\n').map(p => p.trim()).filter(p => p.length > 0)
-      };
-
       const customArticles = getAdminCustomArticles();
-      customArticles.unshift(newArticle);
+
+      if (editingArticleId) {
+        // UPDATE EXISTING ARTICLE
+        const index = customArticles.findIndex(a => a.id === editingArticleId);
+        if (index !== -1) {
+          customArticles[index].title = title;
+          customArticles[index].source_name = source;
+          customArticles[index].source_badge = source;
+          customArticles[index].category = category;
+          customArticles[index].timestamp = pubTimestamp;
+          customArticles[index].time_ago = calculateTimeAgo(pubTimestamp);
+          if (currentAdminUploadedBase64Image || urlImg) {
+            customArticles[index].image = chosenImage;
+          }
+          customArticles[index].paragraphs = content.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+          alert('সংবাদটি সফলভাবে আপডেট করা হয়েছে!');
+        }
+      } else {
+        // CREATE NEW ARTICLE
+        const articleId = 'custom_' + Date.now();
+        const newArticle = {
+          id: articleId,
+          title: title,
+          link: 'https://newsbangla.vercel.app/article/' + articleId,
+          timestamp: pubTimestamp,
+          category: category,
+          source_id: 'newsbangla',
+          source_name: source,
+          source_badge: source,
+          source_color: '#e11d48',
+          image: chosenImage,
+          time_ago: calculateTimeAgo(pubTimestamp),
+          hidden: false,
+          is_custom: true,
+          paragraphs: content.split('\n').map(p => p.trim()).filter(p => p.length > 0)
+        };
+        customArticles.unshift(newArticle);
+        alert('খবরটি সফলভাবে প্রকাশিত হয়েছে! এটি ব্রেকিং শিরোনামে এবং সংশ্লিষ্ট ক্যাটাগরিতে দৃশ্যমান হবে।');
+      }
+
       saveAdminCustomArticles(customArticles);
-
-      // Store in memory & sync global news data
       integrateCustomArticles();
-
-      // Reset form
-      document.getElementById('adminNewArticleForm').reset();
-      currentAdminUploadedBase64Image = '';
-      const previewWrap = document.getElementById('adminImagePreviewWrap');
-      if (previewWrap) previewWrap.style.display = 'none';
-
-      alert('খবরটি সফলভাবে প্রকাশিত হয়েছে! এটি এখন ব্রেকিং নিউজ এবং সংশ্লিষ্ট ক্যাটাগরিতে দৃশ্যমান হবে।');
+      resetAdminForm();
       renderAdminNewsList();
       renderNewsGrid();
       updateTicker();
+    }
+
+    function editCustomArticle(id) {
+      const customArticles = getAdminCustomArticles();
+      const item = customArticles.find(a => a.id === id);
+      if (!item) return;
+
+      editingArticleId = id;
+      document.getElementById('adminArticleTitle').value = item.title || '';
+      document.getElementById('adminArticleSource').value = item.source_name || '';
+      document.getElementById('adminArticleCategory').value = item.category || 'national';
+      document.getElementById('adminArticleContent').value = (item.paragraphs || []).join('\n\n') || item.title || '';
+      document.getElementById('adminArticleImageUrl').value = (item.image && item.image.startsWith('http')) ? item.image : '';
+
+      if (item.timestamp) {
+        const dt = new Date(item.timestamp * 1000);
+        dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
+        document.getElementById('adminArticleDateTime').value = dt.toISOString().slice(0, 16);
+      }
+
+      const previewImg = document.getElementById('adminImagePreviewImg');
+      const previewWrap = document.getElementById('adminImagePreviewWrap');
+      if (item.image && previewImg && previewWrap) {
+        previewImg.src = item.image;
+        previewWrap.style.display = 'block';
+      }
+
+      const formHeading = document.getElementById('adminFormHeadingText');
+      if (formHeading) formHeading.innerText = 'সংবাদটি সম্পাদনা / আপডেট করুন';
+      const publishBtn = document.getElementById('adminPublishBtn');
+      if (publishBtn) publishBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> আপডেট সংরক্ষণ করুন';
+      const cancelBtn = document.getElementById('adminCancelEditBtn');
+      if (cancelBtn) cancelBtn.style.display = 'inline-block';
+
+      // Ensure form is visible
+      const formBox = document.getElementById('addNewsFormContainer');
+      if (formBox) formBox.style.display = 'block';
+      window.scrollTo({ top: formBox.offsetTop - 80, behavior: 'smooth' });
     }
 
     function toggleHideArticle(id) {
