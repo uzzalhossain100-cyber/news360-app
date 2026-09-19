@@ -2254,6 +2254,10 @@
         updateTicker();
       }
 
+      // Check and reflect admin auth status on page load immediately
+      checkAdminAuthOnLoad();
+      integrateCustomArticles();
+
       startAutoRefreshTimer();
       loadNews();
 
@@ -2489,15 +2493,18 @@
           combinedMap.set(it.link, it);
         });
 
-        // Existing items
+        // Existing items (excluding custom articles, they are re-injected cleanly)
         allNewsItems.forEach(it => {
-          if (!combinedMap.has(it.link)) {
+          if (!it.is_custom && !combinedMap.has(it.link)) {
             combinedMap.set(it.link, it);
           }
         });
 
-        // Filter 24h
+        // Filter 24h for regular items
         allNewsItems = Array.from(combinedMap.values()).filter(it => !it.timestamp || it.timestamp >= cut24);
+
+        // Always re-integrate custom articles so admin news stays at the top!
+        integrateCustomArticles();
 
         // Sort: newest first (is_new items prioritized to stay at the top!)
         allNewsItems.sort(function(a, b) {
@@ -2582,13 +2589,18 @@
         }).join('');
       }
 
+      // Keep reference of top ticker items so click opens the exact article
+      window.currentTickerItems = topItems;
+
       // Duplicate list twice for continuous seamless infinite marquee looping
       const singleTrack = buildItems(topItems);
       tickerContainer.innerHTML = singleTrack + singleTrack;
     }
 
     function openTickerByIndex(index) {
-      if (allNewsItems && allNewsItems[index]) {
+      if (window.currentTickerItems && window.currentTickerItems[index]) {
+        openArticleModal(window.currentTickerItems[index]);
+      } else if (allNewsItems && allNewsItems[index]) {
         openArticleModal(allNewsItems[index]);
       }
     }
@@ -2634,11 +2646,18 @@
         items = items.filter(function(item) { return item.title.toLowerCase().indexOf(q) !== -1; });
       }
 
-      // Strict descending order: most recent first
+      // Strict descending order: Admin published custom news and newest items first
       items.sort(function(a, b) {
-        // Items with is_new: true ALWAYS come first at the very top!
+        // Admin published custom news ALWAYS comes first at the very top, sorted newest to oldest
+        if (a.is_custom && !b.is_custom) return -1;
+        if (!a.is_custom && b.is_custom) return 1;
+        if (a.is_custom && b.is_custom) return (b.timestamp || 0) - (a.timestamp || 0);
+
+        // Then newly arrived items
         if (a.is_new && !b.is_new) return -1;
         if (!a.is_new && b.is_new) return 1;
+
+        // Then by timestamp descending
         return (b.timestamp || 0) - (a.timestamp || 0);
       });
 
@@ -2764,7 +2783,12 @@
       }
 
       container.innerHTML = '';
-      extLink.href = item.link;
+      if (item.is_custom) {
+        extLink.style.display = 'none';
+      } else {
+        extLink.style.display = 'inline-flex';
+        extLink.href = item.link;
+      }
 
       modal.classList.add('show');
       document.body.classList.add('article-open');
@@ -3102,6 +3126,9 @@
       // When logged in, show 'এডমিন প্যানেল' tab right next to 'যোগাযোগ'
       if (tabAdmin) {
         tabAdmin.style.display = isAuth ? 'inline-flex' : 'none';
+        if (activePage === 'admin') {
+          tabAdmin.classList.add('active');
+        }
       }
       // Update top button text: if logged in, offer quick access / logout
       if (navAuthBtnText) {
@@ -3396,7 +3423,8 @@
         html += '    </div>';
         html += '  </div>';
 
-        html += '  <div style="display:flex; gap:8px;">';
+        html += '  <div style="display:flex; gap:8px; align-items:center;">';
+        html += '    <button onclick="editCustomArticle(\'' + item.id + '\')" style="background:#2563eb; color:white; border:none; border-radius:6px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer;">এডিট করুন</button>';
         html += '    <button onclick="toggleHideArticle(\'' + item.id + '\')" style="background:' + (isHidden ? '#16a34a' : '#d97706') + '; color:white; border:none; border-radius:6px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer;">' + (isHidden ? 'শো করুন' : 'হাইড করুন') + '</button>';
         html += '    <button onclick="deleteCustomArticle(\'' + item.id + '\')" style="background:#dc2626; color:white; border:none; border-radius:6px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer;">ডিলিট</button>';
         html += '  </div>';
@@ -3410,12 +3438,17 @@
       const nowSec = Math.floor(Date.now() / 1000);
       const customArticles = getAdminCustomArticles();
 
-      // Filter out hidden articles and only include scheduled ones that reached their publish time
+      // Filter out hidden articles and include scheduled ones
       const activeCustom = customArticles.filter(function(it) {
         return !it.hidden && (!it.timestamp || it.timestamp <= (nowSec + 60));
       });
 
-      // Also register article details into INITIAL_ARTICLES_DATA for full news reader
+      // Sort activeCustom: newest timestamp first
+      activeCustom.sort(function(a, b) {
+        return (b.timestamp || 0) - (a.timestamp || 0);
+      });
+
+      // Register article details into INITIAL_ARTICLES_DATA for full news reader modal
       activeCustom.forEach(function(it) {
         if (typeof INITIAL_ARTICLES_DATA !== 'undefined') {
           INITIAL_ARTICLES_DATA[it.link] = {
@@ -3428,7 +3461,7 @@
         }
       });
 
-      // Prepend to allNewsItems (custom published news gets top priority)
+      // Always prepend active custom articles so admin news appears at the very beginning
       const existingNonCustom = allNewsItems.filter(it => !it.is_custom);
       allNewsItems = activeCustom.concat(existingNonCustom);
     }
