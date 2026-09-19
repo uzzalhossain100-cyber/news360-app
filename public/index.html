@@ -1486,24 +1486,27 @@
 
   <!-- Contact Page Container (যোগাযোগ পেজ) -->
   <main id="contactPageView" style="display: none; padding: 24px 14px 60px;">
-    <div class="contact-container" style="max-width: 600px; margin: 0 auto; background: var(--bg-card, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 18px; padding: 30px 24px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); text-align: left; box-sizing: border-box;">
+    <div class="contact-container" style="max-width: 600px; margin: 0 auto; background: var(--bg-card, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 18px; padding: 28px 22px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); text-align: left; box-sizing: border-box;">
       
       <!-- Top Title -->
-      <div style="text-align: center; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border-color, #e2e8f0);">
-        <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 26px; font-weight: 800; margin: 0 auto 10px; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);">উ</div>
-        <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 6px; color: var(--text-main, #0f172a);">যোগাযোগ ও বার্তা</h2>
-        <p style="font-size: 14px; color: var(--text-muted, #64748b); margin: 0; line-height: 1.5;">NewsBangla অ্যাপ সংক্রান্ত যেকোনো তথ্য, পরামর্শ বা মতামতের জন্য সরাসরি মেসেজ পাঠান।</p>
+      <div style="text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color, #e2e8f0);">
+        <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 26px; font-weight: 800; margin: 0 auto 10px; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);">
+          <svg width="30" height="30" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+          </svg>
+        </div>
+        <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 4px; color: var(--text-main, #0f172a);">যোগাযোগ ও বার্তা</h2>
       </div>
 
       <!-- Message Form Box -->
-      <div style="background: var(--bg-primary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; padding: 22px 18px; margin-bottom: 22px; box-sizing: border-box;">
+      <div style="background: var(--bg-primary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; padding: 22px 18px; margin-bottom: 20px; box-sizing: border-box;">
         
-        <!-- Only strict title above the form -->
-        <div style="font-size: 16.5px; font-weight: 700; color: var(--text-main, #0f172a); display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #e2e8f0);">
-          <svg width="20" height="20" fill="none" stroke="#e11d48" stroke-width="2.2" viewBox="0 0 24 24">
+        <!-- Replaced Headline directly above the form as requested -->
+        <div style="font-size: 15.5px; font-weight: 700; color: var(--text-main, #0f172a); display: flex; align-items: flex-start; gap: 10px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color, #e2e8f0); line-height: 1.5;">
+          <svg width="22" height="22" fill="none" stroke="#e11d48" stroke-width="2.2" viewBox="0 0 24 24" style="flex-shrink: 0; margin-top: 1px;">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
           </svg>
-          পরামর্শ বা অভিযোগের জন্য মেসেজ পাঠান
+          <span>NewsBangla অ্যাপ সংক্রান্ত যেকোনো তথ্য, পরামর্শ বা মতামতের জন্য সরাসরি মেসেজ পাঠান।</span>
         </div>
 
         <!-- Success & Error Alerts (Completely hidden initially; no email address visible in alert text) -->
@@ -1533,10 +1536,10 @@
             <input type="email" id="contactEmail" class="contact-input-field" placeholder="ইমেইল ঠিকানা লিখুন" autocomplete="email" style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); outline: none; font-family: inherit;">
           </div>
 
-          <!-- Message Field: Substantially enlarged (min-height: 250px, no example) -->
+          <!-- Message Field: Substantially enlarged (min-height: 260px, no example) -->
           <div style="display: flex; flex-direction: column; gap: 6px;">
             <label for="contactMessage" style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">মেসেজ লিখুন <span style="color:#e11d48;">*</span></label>
-            <textarea id="contactMessage" class="contact-textarea-field" placeholder="আপনার পরামর্শ, অভিযোগ বা মূল্যবান মতামত এখানে বিস্তারিত লিখুন..." required style="width: 100%; box-sizing: border-box; padding: 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); min-height: 250px; resize: vertical; line-height: 1.6; outline: none; font-family: inherit;"></textarea>
+            <textarea id="contactMessage" class="contact-textarea-field" placeholder="আপনার পরামর্শ, অভিযোগ বা মূল্যবান মতামত এখানে বিস্তারিত লিখুন..." required style="width: 100%; box-sizing: border-box; padding: 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #cbd5e1); background: var(--bg-card, #ffffff); color: var(--text-main, #0f172a); min-height: 260px; resize: vertical; line-height: 1.6; outline: none; font-family: inherit;"></textarea>
           </div>
 
           <!-- Submit Button -->
@@ -1549,21 +1552,9 @@
         </form>
       </div>
 
-      <!-- App & Creator Info Card (Email address completely hidden) -->
-      <div style="background: var(--bg-primary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; padding: 16px 18px;">
-        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color, #e2e8f0);">
-          <div style="width: 38px; height: 38px; border-radius: 9px; background: #fee2e2; color: #e11d48; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-            </svg>
-          </div>
-          <div>
-            <div style="font-size: 12px; color: var(--text-muted, #64748b); font-weight: 600;">এডমিন ও প্রতিষ্ঠাতা</div>
-            <div style="font-size: 15px; font-weight: 700; color: var(--text-main, #0f172a);">মোঃ উজ্জ্বল হোসেন</div>
-          </div>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0;">
+      <!-- App Info Card (Admin name completely invisible/removed) -->
+      <div style="background: var(--bg-primary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; padding: 14px 18px;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 4px 0;">
           <div style="width: 38px; height: 38px; border-radius: 9px; background: #fee2e2; color: #e11d48; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -1571,7 +1562,7 @@
           </div>
           <div>
             <div style="font-size: 12px; color: var(--text-muted, #64748b); font-weight: 600;">অফিসিয়াল অ্যাপ্লিকেশন</div>
-            <div style="font-size: 15px; font-weight: 700; color: var(--text-main, #0f172a);">NewsBangla - বাংলাদেশ লাইভ সংবাদ এগ্রিগেটর</div>
+            <div style="font-size: 14.5px; font-weight: 700; color: var(--text-main, #0f172a);">NewsBangla - বাংলাদেশ লাইভ সংবাদ এগ্রিগেটর</div>
           </div>
         </div>
       </div>
