@@ -2344,6 +2344,9 @@
       startAutoRefreshTimer();
       loadNews();
 
+      // Check if URL has ?article= or ?link= parameter to open article directly
+      checkAndOpenArticleFromUrl();
+
       const searchInput = document.getElementById('searchInput');
       searchInput.addEventListener('input', function(e) {
         clearTimeout(searchTimeout);
@@ -2837,60 +2840,152 @@
     // Current opened article reference for sharing
     let currentModalArticle = null;
 
+    // Helper to generate a reliable direct deep-link URL for any article
+    function getArticleDirectShareUrl(item) {
+      if (!item) return window.location.href;
+      const baseUrl = 'https://newsbangla.vercel.app';
+      // If it has an ID, use ?article=<id>
+      if (item.id) {
+        return baseUrl + '/?article=' + encodeURIComponent(item.id);
+      }
+      // Or use original link encoded as ?link=
+      if (item.link) {
+        return baseUrl + '/?link=' + encodeURIComponent(item.link);
+      }
+      return baseUrl;
+    }
+
     function shareArticleTo(channel) {
       if (!currentModalArticle) return;
 
       const title = currentModalArticle.title || 'সংবাদ শিরোনাম';
-      const shareUrl = currentModalArticle.link || window.location.href;
-      const textToShare = title + ' - NewsBangla লাইভ সংবাদের বিস্তারিত পড়ুন: ' + shareUrl;
+      const shareUrl = getArticleDirectShareUrl(currentModalArticle);
+      const textToShare = title + '\n\nNewsBangla-এ বিস্তারিত খবর পড়ুন:\n' + shareUrl;
 
-      if (channel === 'facebook') {
-        const fbUrl = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(title);
-        window.open(fbUrl, '_blank', 'width=640,height=520');
-      } else if (channel === 'whatsapp') {
-        const waUrl = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(textToShare);
-        window.open(waUrl, '_blank');
-      } else if (channel === 'messenger') {
-        // Facebook messenger share / dialog
-        const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        if (isMobileDevice) {
-          window.location.href = 'fb-messenger://share/?link=' + encodeURIComponent(shareUrl) + '&app_id=123456789';
-          setTimeout(function() {
-            window.open('https://www.facebook.com/dialog/send?link=' + encodeURIComponent(shareUrl) + '&app_id=291494419107518&redirect_uri=' + encodeURIComponent(window.location.href), '_blank');
-          }, 600);
-        } else {
-          window.open('https://www.facebook.com/dialog/send?link=' + encodeURIComponent(shareUrl) + '&app_id=291494419107518&redirect_uri=' + encodeURIComponent(window.location.href), '_blank', 'width=640,height=520');
-        }
-      } else if (channel === 'copy') {
+      // 1. If running inside Android App WebView with AndroidTTS / native bridge
+      if (window.AndroidTTS && typeof window.AndroidTTS.shareArticle === 'function') {
+        window.AndroidTTS.shareArticle(title, shareUrl, channel);
+        return;
+      }
+
+      // 2. Handle Copy Link
+      if (channel === 'copy') {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(shareUrl).then(function() {
-            showToast('✓ সংবাদের লিংক কপি করা হয়েছে!');
+            showToast('✓ সংবাদের সরাসরি লিংক কপি করা হয়েছে!');
           }).catch(function() {
             prompt('সংবাদের লিংক কপি করুন:', shareUrl);
           });
         } else {
           prompt('সংবাদের লিংক কপি করুন:', shareUrl);
         }
-      } else if (channel === 'more') {
-        // Native System Web Share API for Android/iOS/Windows (Shares to Messenger, Telegram, X, Viber, IMO, etc.)
+        return;
+      }
+
+      // 3. WhatsApp: Directly triggers WhatsApp App on mobile (whatsapp://) with fallback to web
+      if (channel === 'whatsapp') {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+          // Triggers installed WhatsApp app ready to send
+          window.location.href = 'whatsapp://send?text=' + encodeURIComponent(textToShare);
+          setTimeout(function() {
+            window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(textToShare), '_blank');
+          }, 800);
+        } else {
+          window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(textToShare), '_blank');
+        }
+        return;
+      }
+
+      // 4. Facebook: Opens Facebook app or share dialog
+      if (channel === 'facebook') {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+          // Try Facebook app protocol first, fallback to browser share
+          const fbAppUrl = 'fb://facewebmodal/f?href=' + encodeURIComponent('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl));
+          window.location.href = fbAppUrl;
+          setTimeout(function() {
+            window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(title), '_blank', 'width=640,height=520');
+          }, 600);
+        } else {
+          window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(title), '_blank', 'width=640,height=520');
+        }
+        return;
+      }
+
+      // 5. Messenger: Directly triggers installed Messenger app
+      if (channel === 'messenger') {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+          // Triggers Messenger app send composer
+          window.location.href = 'fb-messenger://share/?link=' + encodeURIComponent(shareUrl);
+          setTimeout(function() {
+            window.open('https://www.facebook.com/dialog/send?link=' + encodeURIComponent(shareUrl) + '&app_id=291494419107518&redirect_uri=' + encodeURIComponent(shareUrl), '_blank');
+          }, 700);
+        } else {
+          window.open('https://www.facebook.com/dialog/send?link=' + encodeURIComponent(shareUrl) + '&app_id=291494419107518&redirect_uri=' + encodeURIComponent(shareUrl), '_blank', 'width=640,height=520');
+        }
+        return;
+      }
+
+      // 6. Native Share API (Shares to Telegram, IMO, X/Twitter, etc.)
+      if (channel === 'more' || !channel) {
         if (navigator.share) {
           navigator.share({
             title: title,
-            text: title + ' - NewsBangla',
+            text: title + '\n' + shareUrl,
             url: shareUrl
           }).catch(function(err) {
-            console.log('Share dismissed or cancelled:', err);
+            console.log('Share dismissed:', err);
           });
         } else {
-          // Fallback share prompt
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(shareUrl).then(function() {
-              showToast('✓ লিংক কপি হয়েছে! যেকোনো সোশ্যাল মিডিয়ায় পেস্ট করে শেয়ার করুন।');
+              showToast('✓ লিংক কপি হয়েছে! যেকোনো সোশ্যাল অ্যাপে পেস্ট করে শেয়ার করুন।');
             });
           } else {
             prompt('শেয়ার করতে লিংকটি কপি করুন:', shareUrl);
           }
         }
+      }
+    }
+
+    
+    // Direct Deep Link Resolver: Automatically opens article when link is visited or pasted
+    function checkAndOpenArticleFromUrl() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const articleId = params.get('article');
+        const articleLink = params.get('link');
+
+        if (!articleId && !articleLink) return;
+
+        function tryFindAndOpen() {
+          let found = null;
+          if (articleId) {
+            found = allNewsItems.find(it => it.id === articleId || it.id === decodeURIComponent(articleId));
+          }
+          if (!found && articleLink) {
+            const decLink = decodeURIComponent(articleLink);
+            found = allNewsItems.find(it => it.link === decLink || it.id === decLink);
+          }
+
+          if (found) {
+            openArticleModal(found);
+            return true;
+          }
+          return false;
+        }
+
+        // Try immediately
+        if (!tryFindAndOpen()) {
+          // Retry after API news load completes
+          setTimeout(tryFindAndOpen, 800);
+          setTimeout(tryFindAndOpen, 1800);
+          setTimeout(tryFindAndOpen, 3000);
+        }
+      } catch (e) {
+        console.warn('URL routing check error:', e);
       }
     }
 
