@@ -1789,12 +1789,7 @@
       }
 
       // Structure message strictly with Name and Mobile number at the bottom as requested
-      const fullFormattedMessage = userMessage + "
-
--------------------------
-প্রেরকের নাম: " + name + "
-মোবাইল নাম্বার: " + phone + "
-ইমেইল: " + email;
+      const fullFormattedMessage = userMessage + "\n\n-------------------------\nপ্রেরকের নাম: " + name + "\nমোবাইল নাম্বার: " + phone + "\nইমেইল: " + email;
 
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;"></span> পাঠানো হচ্ছে...';
@@ -1868,12 +1863,7 @@
 
     function fallbackMailto(name, email, phone, userMessage) {
       const subject = encodeURIComponent('NewsBangla বার্তা: ' + name);
-      const body = encodeURIComponent(userMessage + '
-
--------------------------
-প্রেরকের নাম: ' + name + '
-মোবাইল নাম্বার: ' + phone + '
-ইমেইল: ' + email);
+      const body = encodeURIComponent(userMessage + '\n\n-------------------------\nপ্রেরকের নাম: ' + name + '\nমোবাইল নাম্বার: ' + phone + '\nইমেইল: ' + email);
       window.location.href = 'mailto:' + _DEST_TAG + '?subject=' + subject + '&body=' + body;
       document.getElementById('formAlertSuccess').style.display = 'block';
       document.getElementById('contactMessageForm').reset();
