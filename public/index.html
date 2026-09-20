@@ -9107,18 +9107,19 @@ function selectSource(sourceId) {
       return garbageRegex.test(t);
     }
 
-    function detectCategoryClient(title, url = "") {
+    function detectCategoryClient(title, url) {
+      if (!url) url = "";
       const u = (url || '').toLowerCase();
       const t = (title || '').toLowerCase();
 
-      // Check URL slugs first
+      // Priority 1: Check URL slugs
       if (/\/(sports|sport|khela|cricket|football)\//.test(u)) return 'sports';
       if (/\/(entertainment|binodon|showbiz|cinema|glitz)\//.test(u)) return 'entertainment';
       if (/\/(tech|technology|it|projukti|gadget)\//.test(u)) return 'tech';
       if (/\/(economy|business|arthoniti|banijjo|stock)\//.test(u)) return 'economy';
       if (/\/(international|world|bidesh|prabash)\//.test(u)) return 'international';
 
-      // Check sports first (prevents sports prize/fee words from falling into economy)
+      // Priority 2: Check Sports keywords FIRST (prevents sports money/fee from going into economy)
       if (/খেলা|ক্রিকেট|ফুটবল|মেসি|রোনালদো|গোল|উইকেট|ম্যাচ|সিরিজ|বিপিএল|আইপিএল|ফিফা|বিশ্বকাপ|বোলার|ব্যাটসম্যান|অলরাউন্ডার|টেনিস|টুর্নামেন্ট|স্টেডিয়াম|হাফসেঞ্চুরি|সেঞ্চুরি|টাইগার|মুশফিক|শান্ত|মিরাজ|লিটন|পেসার|স্পিনার|ডার্বি|লা লিগা|রিয়াল মাদ্রিদ|বার্সেলোনা/.test(t)) return 'sports';
       if (/সিনেমা|নাটক|অভিনেতা|অভিনেত্রী|গান|চলচ্চিত্র|হিরো|বলিউড|হলিউড|ঢালিউড|তারকা|শাকিব|নায়িকা|অ্যালবাম|শুটিং|ওটিটি|রিলিজ|ট্রেলার/.test(t)) return 'entertainment';
       if (/প্রযুক্তি|মোবাইল|ফোন|ইন্টারনেট|গুগল|অ্যাপ|কম্পিউটার|এআই|সাইবার|সফটওয়্যার|স্যাটেলাইট|ফেসবুক|হোয়াটসঅ্যাপ|ড্রোন|চ্যাটজিপিটি|কৃত্রিম বুদ্ধিমত্তা/.test(t)) return 'tech';
@@ -11418,21 +11419,182 @@ function editCustomArticle(id) {
       if (refreshBtn) {
         refreshBtn.classList.add('refreshing');
         const svg = refreshBtn.querySelector('svg');
-        if (svg) svg.style.animation = 'spin 0.6s linear infinite';
+        if (svg) svg.style.animation = 'spin 0.8s linear infinite';
       }
 
-      // Re-integrate any newly published custom articles immediately
+      // Re-integrate any newly published or updated articles
       integrateCustomArticles();
 
-      // Trigger ultra-fast loadNews with force_refresh flag
-      loadNews(true).finally(() => {
+      // Trigger loadNews with currentCategory & currentSource active
+      loadNews(true);
+
+      setTimeout(function() {
         if (refreshBtn) {
           const svg = refreshBtn.querySelector('svg');
           if (svg) svg.style.animation = 'none';
-          refreshBtn.classList.remove('refreshing');
         }
-        showToast('✓ সর্বশেষ তাজা খবর সফলভাবে রিফ্রেশ করা হয়েছে!');
-      });
+      }, 900);
     }
 
-    
+  </script>
+
+    <script>
+    // Live Remote Configuration: checks live URL for updates
+    (function checkLiveWebUpdate() {
+      const LIVE_URL = 'https://newsbangla.vercel.app';
+      if (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        fetch(LIVE_URL + '/api/news?limit=1', { mode: 'cors', cache: 'no-cache' })
+          .then(res => {
+            if (res.ok) {
+              console.log('Online Live URL connected, fetching fresh live bundle...');
+            }
+          })
+          .catch(() => {});
+      }
+    })();
+  </script>
+
+
+  <!-- Admin Login Modal -->
+  <div id="adminLoginModal" onclick="if(event.target===this)closeAdminLoginModal()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:999999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:var(--bg-card, #ffffff); border-radius:18px; padding:28px 24px; max-width:380px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,0.25); border:1px solid var(--border-color, #e2e8f0); position:relative; box-sizing:border-box;">
+      <button onclick="closeAdminLoginModal()" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:22px; line-height:1;">&times;</button>
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="width:52px; height:52px; border-radius:50%; background:#fee2e2; color:#e11d48; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
+          <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+        </div>
+        <h3 style="font-size:20px; font-weight:800; color:var(--text-main); margin:0 0 4px;">এডমিন লগইন</h3>
+        <p style="font-size:13px; color:var(--text-muted); margin:0;">সংবাদ প্রকাশ ও ব্যবস্থাপনার জন্য লগিন করুন</p>
+      </div>
+
+      <div id="loginErrorMsg" style="display:none; padding:10px 12px; border-radius:8px; font-size:13px; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; margin-bottom:14px; font-weight:600;"></div>
+
+      <form onsubmit="handleAdminLoginSubmit(event)" style="display:flex; flex-direction:column; gap:14px; margin:0;">
+        <div>
+          <label style="display:block; font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:5px;">এডমিন আইডি</label>
+          <input type="text" id="adminUsernameInput" placeholder="এডমিন আইডি লিখুন" required autocomplete="username" style="width:100%; box-sizing:border-box; padding:11px 13px; font-size:14px; border-radius:8px; border:1.5px solid var(--border-color, #cbd5e1); background:var(--bg-primary, #f8fafc); color:var(--text-main); outline:none;">
+        </div>
+        <div>
+          <label style="display:block; font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:5px;">পাসওয়ার্ড</label>
+          <input type="password" id="adminPasswordInput" placeholder="পাসওয়ার্ড লিখুন" required autocomplete="current-password" style="width:100%; box-sizing:border-box; padding:11px 13px; font-size:14px; border-radius:8px; border:1.5px solid var(--border-color, #cbd5e1); background:var(--bg-primary, #f8fafc); color:var(--text-main); outline:none;">
+        </div>
+        <button type="submit" style="width:100%; background:linear-gradient(135deg, #e11d48 0%, #be123c 100%); color:white; border:none; border-radius:9px; padding:12px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(225,29,72,0.3); margin-top:4px;">লগিন করুন</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Custom In-App Logout Confirmation Modal (Works 100% reliably on Android WebView and Browsers) -->
+  <div id="adminLogoutConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px);">
+    <div style="background: var(--bg-card, #ffffff); border-radius: 20px; max-width: 380px; width: 100%; padding: 26px 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid var(--border-color, #e2e8f0); animation: modalFadeIn 0.2s ease;">
+      <div style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+        </svg>
+      </div>
+      <h3 style="font-size: 18px; font-weight: 800; color: var(--text-main, #0f172a); margin-bottom: 8px;">এডমিন লগআউট</h3>
+      <p style="font-size: 13.5px; color: var(--text-muted, #64748b); line-height: 1.5; margin-bottom: 22px;">আপনি কি এডমিন প্যানেল থেকে নিশ্চিতভাবে লগআউট করতে চান?</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button type="button" onclick="closeAdminLogoutModal()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: var(--text-main, #334155); font-weight: 700; font-size: 13.5px; cursor: pointer;">না, বাতিল</button>
+        <button type="button" onclick="confirmAdminLogoutExecute()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);">হ্যাঁ, লগআউট</button>
+      </div>
+    </div>
+  </div>
+  <!-- Custom In-App Delete Confirmation Modal (100% WebView & Mobile Compatible) -->
+  <div id="adminDeleteConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px);">
+    <div style="background: var(--bg-card, #ffffff); border-radius: 20px; max-width: 380px; width: 100%; padding: 26px 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid var(--border-color, #e2e8f0); animation: modalFadeIn 0.2s ease;">
+      <div style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </svg>
+      </div>
+      <h3 style="font-size: 18px; font-weight: 800; color: var(--text-main, #0f172a); margin-bottom: 8px;">খবর মুছে ফেলুন</h3>
+      <p style="font-size: 13.5px; color: var(--text-muted, #64748b); line-height: 1.5; margin-bottom: 22px;">আপনি কি নিশ্চিত যে এই সংবাদটি স্থায়ীভাবে মুছে ফেলতে চান?</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button type="button" onclick="closeAdminDeleteModal()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: var(--text-main, #334155); font-weight: 700; font-size: 13.5px; cursor: pointer;">না, রাখুন</button>
+        <button type="button" onclick="confirmDeleteArticleExecute()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);">হ্যাঁ, ডিলিট করুন</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Standalone Quick Edit News Modal for NewsBangla & Admin -->
+  <div id="quickEditNewsModal" onclick="if(event.target===this)closeQuickEditModal();" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 2147483647; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;">
+    <div style="background: var(--bg-card, #ffffff); border-radius: 18px; max-width: 650px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 1px solid var(--border-color, #e2e8f0); position: relative; margin: auto;">
+      
+      <!-- Modal Header -->
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 14px; margin-bottom: 18px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center;">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+          </div>
+          <div>
+            <h3 id="quickEditModalTitle" style="margin: 0; font-size: 17.5px; font-weight: 800; color: var(--text-main, #0f172a);">সংবাদ সম্পাদনা ও প্রকাশ</h3>
+            <span style="font-size: 12px; color: var(--text-muted, #64748b);">তথ্য পরিবর্তন করে সরাসরি পাবলিশ করুন</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeQuickEditModal()" style="background: none; border: none; font-size: 26px; color: var(--text-muted); cursor: pointer; padding: 0 6px; line-height: 1;">&times;</button>
+      </div>
+
+      <!-- Edit Form -->
+      <form id="quickEditArticleForm" onsubmit="handleQuickEditSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <input type="hidden" id="quickEditArticleId">
+
+        <!-- 1. শিরোনাম লিখুন -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">শিরোনাম লিখুন <span style="color:#e11d48;">*</span></label>
+          <input type="text" id="quickEditTitle" required placeholder="সংবাদের শিরোনাম..." style="width: 100%; box-sizing: border-box; padding: 11px 14px; font-size: 15px; font-weight: 600; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+        </div>
+
+        <!-- 2. উৎস ও ক্যাটাগরি -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">উৎস (সংবাদমাধ্যম) <span style="color:#e11d48;">*</span></label>
+            <input type="text" id="quickEditSource" required placeholder="যেমন: NewsBangla" style="width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">ক্যাটাগরি <span style="color:#e11d48;">*</span></label>
+            <select id="quickEditCategory" required style="width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none; cursor: pointer;">
+              <option value="national">জাতীয়</option>
+              <option value="international">আন্তর্জাতিক</option>
+              <option value="sports">খেলাধুলা</option>
+              <option value="tech">তথ্যপ্রযুক্তি</option>
+              <option value="entertainment">বিনোদন</option>
+              <option value="economy">অর্থনীতি</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 3. প্রকাশের তারিখ ও সময় নির্বাচন করুন -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">প্রকাশের তারিখ ও সময় নির্বাচন করুন <span style="color:#e11d48;">*</span></label>
+          <input type="datetime-local" id="quickEditDateTime" required style="width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+        </div>
+
+        <!-- 4. বিস্তারিত খবর লিখুন -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">বিস্তারিত খবর লিখুন <span style="color:#e11d48;">*</span></label>
+          <textarea id="quickEditContent" required placeholder="খবরের বিস্তারিত বিবরণ লিখুন..." style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); min-height: 160px; resize: vertical; line-height: 1.6; outline: none;"></textarea>
+        </div>
+
+        <!-- Image preview / change -->
+        <div style="display: flex; align-items: center; gap: 14px; background: var(--bg-primary, #f8fafc); padding: 12px; border-radius: 10px; border: 1px dashed var(--border-color, #e2e8f0);">
+          <img id="quickEditImagePreview" src="" style="width: 80px; height: 56px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color, #e2e8f0); background: #eee;">
+          <div style="flex: 1;">
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--text-main, #0f172a); margin-bottom: 4px;">ছবি পরিবর্তন (গ্যালারি থেকে)</div>
+            <input type="file" id="quickEditImageFile" accept="image/*" onchange="handleQuickEditImageUpload(event)" style="font-size: 12px; color: var(--text-muted, #64748b);">
+          </div>
+        </div>
+
+        <!-- Modal Actions -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; border-top: 1px solid var(--border-color, #e2e8f0); padding-top: 14px; flex-wrap: wrap;">
+          <button type="button" onclick="closeQuickEditModal()" style="background: var(--bg-primary, #f8fafc); border: 1.5px solid var(--border-color, #e2e8f0); color: var(--text-main, #0f172a); border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;">বাতিল</button>
+          <button type="button" onclick="submitQuickEditForm(false)" style="background: #2563eb; color: white; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">✓ ড্রাফট সেভ করুন</button>
+          <button type="button" onclick="submitQuickEditForm(true)" style="background: linear-gradient(135deg, #16a34a, #15803d); color: white; border: none; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(22,163,74,0.25);">🚀 সেভ ও সরাসরি পাবলিশ করুন</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</body>
+</html>
