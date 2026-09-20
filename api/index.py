@@ -985,6 +985,8 @@ class AdminNewsItem(BaseModel):
     image: Optional[str] = ""
     time_ago: Optional[str] = "এইমাত্র"
     hidden: Optional[bool] = False
+    published: Optional[bool] = False
+    published_at: Optional[int] = None
     is_custom: Optional[bool] = True
     paragraphs: Optional[list] = []
 
