@@ -8994,7 +8994,7 @@
         }
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
         const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
         if (resp.ok) {
@@ -9007,15 +9007,18 @@
         console.warn('Backend live fetch err:', err);
       }
 
-      // 2. Fetch direct RSS feeds as fallback
+      // 2. Fallback to direct RSS feeds only if backend completely unreachable and only if items have real images
       if (freshItems.length === 0) {
         try {
           const direct = await fetchDirectRssFeeds();
           if (direct && direct.length > 0) {
-            if (targetCategory && targetCategory !== 'all') {
-              freshItems = direct.filter(it => it.category === targetCategory);
-            } else {
-              freshItems = direct;
+            const validWithImages = direct.filter(it => it.image && !it.image.includes('unsplash.com'));
+            if (validWithImages.length > 0) {
+              if (targetCategory && targetCategory !== 'all') {
+                freshItems = validWithImages.filter(it => it.category === targetCategory);
+              } else {
+                freshItems = validWithImages;
+              }
             }
           }
         } catch (e) {

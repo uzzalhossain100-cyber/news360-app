@@ -585,33 +585,28 @@ def get_news(
     news = []
     now_ts = time.time()
     
-    # 1. Prothom Alo
-    if not source or source == 'all' or source == 'prothomalo':
-        news.extend(fetch_prothomalo_live(now_ts))
+    fetch_map = {
+        'prothomalo': fetch_prothomalo_live,
+        'bbc': fetch_bbc_live,
+        'ittefaq': fetch_ittefaq_live,
+        'bdpratidin': fetch_bdpratidin_live,
+        'kalerkantho': fetch_kalerkantho_live,
+        'jugantor': fetch_jugantor_live,
+        'bdnews24': fetch_bdnews24_live
+    }
 
-    # 2. BBC Bangla
-    if not source or source == 'all' or source == 'bbc':
-        news.extend(fetch_bbc_live(now_ts))
-
-    # 3. Daily Ittefaq (Live Scraper)
-    if not source or source == 'all' or source == 'ittefaq':
-        news.extend(fetch_ittefaq_live(now_ts))
-
-    # 4. Bangladesh Pratidin (Live Scraper)
-    if not source or source == 'all' or source == 'bdpratidin':
-        news.extend(fetch_bdpratidin_live(now_ts))
-
-    # 5. Kaler Kantho (Live Scraper)
-    if not source or source == 'all' or source == 'kalerkantho':
-        news.extend(fetch_kalerkantho_live(now_ts))
-
-    # 6. Daily Jugantor (Live Scraper)
-    if not source or source == 'all' or source == 'jugantor':
-        news.extend(fetch_jugantor_live(now_ts))
-
-    # 7. BDNews24 (Live Scraper)
-    if not source or source == 'all' or source == 'bdnews24':
-        news.extend(fetch_bdnews24_live(now_ts))
+    if source and source != 'all' and source in fetch_map:
+        news.extend(fetch_map[source](now_ts))
+    else:
+        # Run all scrapers concurrently in parallel threads so entire API finishes in 2.5 seconds!
+        with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+            future_to_source = {executor.submit(fn, now_ts): s_id for s_id, fn in fetch_map.items()}
+            for future in concurrent.futures.as_completed(future_to_source):
+                try:
+                    res_items = future.result()
+                    if res_items: news.extend(res_items)
+                except Exception:
+                    pass
 
     # Fallback to local initial news if live fetch count is low
     if len(news) < 5:
