@@ -853,16 +853,18 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
     real_url = url
 
     # Decode Google News redirect if needed
+    decode_err = ""
     if 'news.google.com' in real_url:
         try:
             from googlenewsdecoder import new_decoderv1
             res = new_decoderv1(real_url)
             if res.get('status') and res.get('decoded_url'):
                 real_url = res['decoded_url']
-        except Exception:
-            pass
-
-    # Select optimal header to bypass Cloudflare protection
+            else:
+                decode_err = f"Failed to decode: {res}"
+        except Exception as ex:
+            decode_err = f"Decoder exception: {ex}"
+# Select optimal header to bypass Cloudflare protection
     if 'jugantor.com' in real_url:
         headers = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
     elif any(d in real_url for d in ['ittefaq.com.bd', 'bd-pratidin.com', 'kalerkantho.com']):
@@ -921,12 +923,15 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
                         seen_paras.add(txt)
                         paras.append(txt)
     except Exception as e:
-        pass
+        import traceback
+        err_str = f"{type(e).__name__}: {e} -> {traceback.format_exc()}"
+        print("GET_ARTICLE ERROR:", err_str)
+        return {"title": title or title_hint or "", "image": image, "paragraphs": [], "debug_error": err_str, "decoded_url": real_url}
 
     return {
         "title": title or title_hint or "",
         "image": image,
-        "paragraphs": paras[:35]
+        "paragraphs": paras[:35], "debug_url": real_url, "decode_err": decode_err
     }
 
 
@@ -995,7 +1000,10 @@ def read_persisted_admin_articles():
         with urllib.request.urlopen(req, timeout=4) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except Exception as e:
-        pass
+        import traceback
+        err_str = f"{type(e).__name__}: {e} -> {traceback.format_exc()}"
+        print("GET_ARTICLE ERROR:", err_str)
+        return {"title": title or title_hint or "", "image": image, "paragraphs": [], "debug_error": err_str, "decoded_url": real_url}
 
     # 2. Try reading from local public folder
     if os.path.exists(LOCAL_STATIC_FILE):
