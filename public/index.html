@@ -2131,6 +2131,9 @@
     const SOURCE_COLORS = {
       prothomalo: '#e11d48',
       bbc: '#dc2626',
+      channel24: '#0284c7',
+      ntv: '#16a34a',
+      rtv: '#ea580c',
       bdpratidin: '#16a34a',
       ittefaq: '#2563eb',
       kalerkantho: '#d97706',
@@ -2141,6 +2144,9 @@
     const SOURCE_NAMES = {
       prothomalo: 'প্রথম আলো',
       bbc: 'বিবিসি বাংলা',
+      channel24: 'চ্যানেল ২৪',
+      ntv: 'এনটিভি (NTV)',
+      rtv: 'আরটিভি (RTV)',
       bdpratidin: 'বাংলাদেশ প্রতিদিন',
       ittefaq: 'দৈনিক ইত্তেফাক',
       kalerkantho: 'কালের কণ্ঠ',
@@ -4192,17 +4198,19 @@
       // Re-integrate any newly published or updated articles
       integrateCustomArticles();
 
-      // Trigger loadNews across all papers and categories
-      loadNews(true);
+      const targetLabel = (currentSource !== 'all' ? (SOURCE_NAMES[currentSource] || 'নির্বাচিত পত্রিকা') : '') +
+                          (currentSource !== 'all' && currentCategory !== 'all' ? ' - ' : '') +
+                          (currentCategory !== 'all' ? (CATEGORY_NAMES[currentCategory] || 'নির্বাচিত ক্যাটাগরি') : '');
 
-      setTimeout(function() {
+      loadNews(true).finally(() => {
         if (refreshBtn) {
           const svg = refreshBtn.querySelector('svg');
           if (svg) svg.style.animation = 'none';
           refreshBtn.classList.remove('refreshing');
         }
-        showToast('✓ সকল পত্রিকা ও সকল ক্যাটাগরিতে নতুন খবর রিফ্রেশ হয়েছে!');
-      }, 1200);
+        const msg = targetLabel ? '✓ ' + targetLabel + '-এর তাজা খবর রিফ্রেশ হয়েছে!' : '✓ সকল পত্রিকা ও সকল ক্যাটাগরিতে নতুন খবর রিফ্রেশ হয়েছে!';
+        showToast(msg);
+      });
     }
 
   </script>

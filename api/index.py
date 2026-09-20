@@ -422,6 +422,15 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts):
         pass
     return candidates
 
+def fetch_channel24_live(now_ts):
+    return fetch_google_site_rss('channel24bd.tv', 'channel24', 'চ্যানেল ২৪', 'Channel 24', '#0284c7', now_ts)
+
+def fetch_ntv_live(now_ts):
+    return fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts)
+
+def fetch_rtv_live(now_ts):
+    return fetch_google_site_rss('rtvonline.com', 'rtv', 'আরটিভি (RTV)', 'RTV', '#ea580c', now_ts)
+
 def fetch_ittefaq_live(now_ts):
     return fetch_google_site_rss('ittefaq.com.bd', 'ittefaq', 'দৈনিক ইত্তেফাক', 'Ittefaq', '#2563eb', now_ts)
 
@@ -538,8 +547,8 @@ def get_news(
     now_ts = time.time()
     cache_key = f"{source}_{category}_{limit}"
 
-    # Return cached data within 40 seconds unless force_refresh requested
-    if not force_refresh and (now_ts - _CACHE_NEWS_TIME < 40) and cache_key in _CACHE_NEWS_DATA:
+    # Return cached data within 30 seconds unless force_refresh requested
+    if not force_refresh and (now_ts - _CACHE_NEWS_TIME < 30) and cache_key in _CACHE_NEWS_DATA:
         return _CACHE_NEWS_DATA[cache_key]
     news = []
     
@@ -569,6 +578,9 @@ def get_news(
     fetch_map = {
         'prothomalo': fetch_prothomalo_live,
         'bbc': fetch_bbc_live,
+        'channel24': fetch_channel24_live,
+        'ntv': fetch_ntv_live,
+        'rtv': fetch_rtv_live,
         'ittefaq': fetch_ittefaq_live,
         'bdpratidin': fetch_bdpratidin_live,
         'kalerkantho': fetch_kalerkantho_live,
@@ -580,7 +592,7 @@ def get_news(
         news.extend(fetch_map[source](now_ts))
     else:
         # Run all scrapers concurrently with a strict 4.5s overall timeout
-        with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_source = {executor.submit(fn, now_ts): s_id for s_id, fn in fetch_map.items()}
             done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=3.2)
             for future in done:
