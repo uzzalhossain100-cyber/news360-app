@@ -8677,14 +8677,7 @@
       document.getElementById('contactMessageForm').reset();
     }
 
-    function openNewsBanglaDesk() {
-      selectSource('newsbangla');
-      const tabNewsBangla = document.getElementById('tabNewsBangla');
-      if (tabNewsBangla) tabNewsBangla.classList.add('active');
-      if (isAdminLoggedIn()) {
-        autoCurateNewsForNewsBanglaDesk();
-      }
-    }
+
 
     function switchPage(page) {
       activePage = page;
@@ -8697,11 +8690,9 @@
       const tabContact = document.getElementById('tabContact');
       const tabAdmin = document.getElementById('tabAdmin');
 
-      const tabNewsBangla = document.getElementById('tabNewsBangla');
       if (tabNews) tabNews.classList.remove('active');
       if (tabContact) tabContact.classList.remove('active');
       if (tabAdmin) tabAdmin.classList.remove('active');
-      if (tabNewsBangla) tabNewsBangla.classList.remove('active');
 
       // Hide all pages first
       if (newsView) newsView.style.display = 'none';
@@ -8894,15 +8885,7 @@ function selectSource(sourceId) {
         }
       });
 
-      // Update top tabNewsBangla active indicator if present
-      const tabNewsBangla = document.getElementById('tabNewsBangla');
-      if (tabNewsBangla) {
-        if (sourceId === 'newsbangla') {
-          tabNewsBangla.classList.add('active');
-        } else {
-          tabNewsBangla.classList.remove('active');
-        }
-      }
+
 
       if (activePage !== 'news') {
         switchPage('news');
@@ -10320,15 +10303,8 @@ function selectSource(sourceId) {
       const navAuthBtn = document.getElementById('navAuthBtn');
       const navAuthBtnText = document.getElementById('navAuthBtnText');
       
-      // When logged in, show 'NewsBangla ডেস্ক' and 'এডমিন প্যানেল' tabs right next to 'যোগাযোগ'
-      if (tabNewsBangla) {
-        tabNewsBangla.style.display = isAuth ? 'inline-flex' : 'none';
-        if (activePage === 'news' && currentSource === 'newsbangla') {
-          tabNewsBangla.classList.add('active');
-        } else {
-          tabNewsBangla.classList.remove('active');
-        }
-      }
+      // When logged in, show 'এডমিন প্যানেল' tab right next to 'যোগাযোগ'
+
       if (tabAdmin) {
         tabAdmin.style.display = isAuth ? 'inline-flex' : 'none';
         if (activePage === 'admin') {
