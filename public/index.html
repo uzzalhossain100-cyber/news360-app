@@ -2444,11 +2444,7 @@
 
       // Render pre-embedded data instantly
       if (typeof INITIAL_NEWS_DATA !== 'undefined' && Array.isArray(INITIAL_NEWS_DATA) && INITIAL_NEWS_DATA.length > 0) {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const cut24 = nowSec - (24 * 3600);
-        allNewsItems = INITIAL_NEWS_DATA.filter(function(it) {
-          return !it.timestamp || it.timestamp >= cut24;
-        });
+        allNewsItems = [...INITIAL_NEWS_DATA];
         allNewsItems.forEach(function(item) {
           if (item.timestamp) {
             item.time_ago = calculateTimeAgo(item.timestamp);
@@ -2757,6 +2753,56 @@
         if (svg) svg.style.animation = 'none';
         refreshBtn.classList.remove('refreshing');
       }
+    }
+
+    function updateTicker() {
+      if (!allNewsItems || allNewsItems.length === 0) return;
+      const tickerContainer = document.getElementById('tickerContent');
+      if (!tickerContainer) return;
+
+      // Extract active custom published news first (always featured prominently in breaking news)
+      const customArticles = (typeof getAdminCustomArticles === 'function' ? getAdminCustomArticles() : []).filter(it => !it.hidden);
+      const regularClean = allNewsItems.filter(it => !it.is_custom && !isNonNewsHeadline(it.title));
+      
+      // Combine: custom published news at the very front of the ticker
+      const combinedTickerList = customArticles.concat(regularClean);
+      const topItems = combinedTickerList.slice(0, 25);
+      if (topItems.length === 0) return;
+
+      function buildItems(list) {
+        return list.map(function(item, index) {
+          const srcColor = SOURCE_COLORS[item.source_id] || '#dc2626';
+          const timeText = item.time_ago || '';
+          return '<span class="ticker-item" data-index="' + index + '" onclick="openTickerByIndex(' + index + ')" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin-right:24px;">' +
+                   '<span class="ticker-source-tag" style="color:' + srcColor + '; font-weight:800;">' + item.source_name + '</span> ' +
+                   '<span style="font-weight:600;">' + item.title + '</span>' +
+                   (timeText ? ' <span style="font-size:11.5px; opacity:0.75;">(' + timeText + ')</span>' : '') +
+                   '<span class="ticker-bullet" style="color:#dc2626; margin-left:8px;">★</span>' +
+                 '</span>';
+        }).join('');
+      }
+
+      window.currentTickerItems = topItems;
+      const singleTrack = buildItems(topItems);
+      tickerContainer.innerHTML = singleTrack + singleTrack;
+    }
+
+    function openTickerByIndex(index) {
+      if (window.currentTickerItems && window.currentTickerItems[index]) {
+        openArticleModal(window.currentTickerItems[index]);
+      } else if (allNewsItems && allNewsItems[index]) {
+        openArticleModal(allNewsItems[index]);
+      }
+    }
+
+    function pauseTicker() {
+      const el = document.getElementById('tickerContent');
+      if (el) el.classList.add('paused');
+    }
+
+    function resumeTicker() {
+      const el = document.getElementById('tickerContent');
+      if (el) el.classList.remove('paused');
     }
 
     function renderNewsGrid() {
