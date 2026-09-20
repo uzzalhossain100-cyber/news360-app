@@ -9393,53 +9393,24 @@ function selectSource(sourceId) {
 
     function renderNewsGrid() {
       const isAdmin = isAdminLoggedIn();
-
-      // Dynamic on-the-fly NewsBangla curation for frontend
       const grid = document.getElementById('newsGrid');
       const empty = document.getElementById('emptyState');
       grid.innerHTML = '';
 
-      // Auto-remove any news older than 24 hours (86,400 seconds)
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const cutoff24h = nowSeconds - (24 * 3600);
+      let items = [];
 
-      let items = allNewsItems.filter(function(item) {
-        if (isNonNewsHeadline(item.title)) return false;
-        // Never filter out custom / NewsBangla articles by 24h cutoff
-        if (item.is_custom || item.source_id === 'newsbangla') return true;
-        if (!item.timestamp) return true;
-        return item.timestamp >= cutoff24h;
-      });
-
-      // Filter by newspaper source
-      if (currentSource === 'all') {
-        // In "সকল সংবাদ" feed, strictly exclude any unpublished items for everybody!
-        items = items.filter(function(item) {
-          if (item.is_custom || item.source_id === 'newsbangla') {
-            return item.published === true || (item.published_at && item.published_at > 0);
-          }
-          return true;
-        });
-      } else if (currentSource === 'newsbangla') {
-        // In NewsBangla page, match both source_id === 'newsbangla' and is_custom
-        items = items.filter(function(item) {
-          return item.source_id === 'newsbangla' || item.is_custom;
-        });
-      } else {
-        items = items.filter(function(item) { return item.source_id === currentSource; });
-      }
-
-      // Handle NewsBangla Admin Status Filter & Filter Bar display
-      const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
+      // User Strict Requirement:
+      // "NewsBangla পেজে ড্রফট/আনপাবলিশড ও সব ক্যাটাগরিতে শুধুমাত্র যে সকল খবর এডমিন নতুন খবর যোগ করুন পেজ থেকে যোগ করবে সেগুলো আসবে, অন্য কোন খবর আসার দরকার নেই"
       if (currentSource === 'newsbangla') {
+        const customArticles = getAdminCustomArticles().filter(it => !it.hidden);
+
         const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
         if (isAdmin) {
           if (nbFilterBar) nbFilterBar.style.display = 'flex';
-          
-          const allNBItems = (allNewsItems || []).filter(it => (it.source_id === 'newsbangla' || it.is_custom) && !it.hidden);
-          const countAll = allNBItems.length;
-          const countPub = allNBItems.filter(it => it.published === true || (it.published_at && it.published_at > 0)).length;
-          const countUnpub = allNBItems.filter(it => !it.published && !it.published_at).length;
+
+          const countAll = customArticles.length;
+          const countPub = customArticles.filter(it => it.published === true || (it.published_at && it.published_at > 0)).length;
+          const countUnpub = customArticles.filter(it => !it.published && !it.published_at).length;
 
           const elAll = document.getElementById('nbCountAll');
           const elPub = document.getElementById('nbCountPub');
@@ -9449,33 +9420,65 @@ function selectSource(sourceId) {
           if (elUnpub) elUnpub.innerText = bnDigits(countUnpub);
 
           if (currentNewsBanglaAdminStatusFilter === 'unpublished') {
-            items = items.filter(it => !it.published && !it.published_at);
+            items = customArticles.filter(it => !it.published && !it.published_at);
           } else if (currentNewsBanglaAdminStatusFilter === 'published') {
-            items = items.filter(it => it.published === true || (it.published_at && it.published_at > 0));
+            items = customArticles.filter(it => it.published === true || (it.published_at && it.published_at > 0));
+          } else {
+            // 'all'
+            items = customArticles.slice();
           }
         } else {
           if (nbFilterBar) nbFilterBar.style.display = 'none';
           // General user on NewsBangla page strictly sees published items only!
-          items = items.filter(it => it.published === true || (it.published_at && it.published_at > 0));
+          items = customArticles.filter(it => it.published === true || (it.published_at && it.published_at > 0));
         }
+
+        // Apply category filter if active (if 'all', shows all categories!)
+        if (currentCategory !== 'all') {
+          items = items.filter(it => it.category === currentCategory);
+        }
+
       } else {
+        // Standard newspapers or "সকল সংবাদ" (currentSource === 'all')
         const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
         if (nbFilterBar) nbFilterBar.style.display = 'none';
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const cutoff24h = nowSeconds - (24 * 3600);
+
+        items = allNewsItems.filter(function(item) {
+          if (isNonNewsHeadline(item.title)) return false;
+          if (item.is_custom || item.source_id === 'newsbangla') return true;
+          if (!item.timestamp) return true;
+          return item.timestamp >= cutoff24h;
+        });
+
+        if (currentSource === 'all') {
+          // In "সকল সংবাদ", strictly include ONLY published articles!
+          items = items.filter(function(item) {
+            if (item.is_custom || item.source_id === 'newsbangla') {
+              return item.published === true || (item.published_at && item.published_at > 0);
+            }
+            return true;
+          });
+        } else {
+          items = items.filter(function(item) { return item.source_id === currentSource; });
+        }
+
+        // Filter by category
+        if (currentCategory !== 'all') {
+          items = items.filter(function(item) { return item.category === currentCategory; });
+        }
       }
 
-      // Filter by category
-      if (currentCategory !== 'all') {
-        items = items.filter(function(item) { return item.category === currentCategory; });
-      }
-
-      // Filter by search query
+      // Filter by search query if any
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        items = items.filter(function(item) { return item.title.toLowerCase().indexOf(q) !== -1; });
+        items = items.filter(function(item) { return (item.title || '').toLowerCase().indexOf(q) !== -1; });
       }
 
       // Strict Chronological Order across all displayed items:
-      // User Requirement: "যে খবরটি সবচেয়ে কম আগের সেটি প্রথমে আসবে তা যখনই লোড করা হোক না কেন? সিরিয়াল ঠিক রাখতে হবে।"
+      // "যে খবরটি সবচেয়ে কম আগের সেটি প্রথমে আসবে তা যখনই লোড করা হোক না কেন? সিরিয়াল ঠিক রাখতে হবে।"
       items.sort(function(a, b) {
         const tA = Number(a.published_at || a.timestamp || 0);
         const tB = Number(b.published_at || b.timestamp || 0);
