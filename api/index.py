@@ -890,8 +890,13 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 
 @app.get("/article/{article_id:path}")
 def direct_article_share_endpoint(article_id: str, request: Request):
-    user_agent = request.headers.get("user-agent", "")
-    return render_social_share_page(article_id=article_id, direct_link=None, user_agent=user_agent)
+    try:
+        user_agent = request.headers.get("user-agent", "")
+        return render_social_share_page(article_id=article_id, direct_link=None, user_agent=user_agent)
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        return Response(content="Error: " + err_msg, media_type="text/plain", status_code=200)
 
 @app.get("/api/article-image/{article_id}")
 def serve_article_image(article_id: str):
