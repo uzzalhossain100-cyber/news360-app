@@ -620,6 +620,28 @@ def get_news(
     news = []
     now_ts = time.time()
     
+    # 1. SPECIAL CASE: NewsBangla Exclusive Source
+    # ("এখানে পত্রিকা ক্যাটাগরিতে আর একটি নাম যোগ হবে NewsBangla এখানে ক্লিক করলে ক্যাটাগরি অনুযায়ী প্রতিটি বিভাগে অন্য পত্রিকার খবর থেকে নিজের মতো করে কিছু মূল খবর তৈরী করে প্রদর্শন করবে সাথে খবরের ছবিটিও নিজের মতো খবর রিলেটেড নতুন ছবি দিবে")
+    if source == 'newsbangla':
+        catalog = load_pristine_catalog()
+        curated_pool = []
+        seen_t = set()
+        for it in catalog:
+            c_it = curate_into_newsbangla(it)
+            if c_it['title'] not in seen_t:
+                seen_t.add(c_it['title'])
+                curated_pool.append(c_it)
+
+        if category and category != 'all':
+            curated_pool = [n for n in curated_pool if n.get('category') == category]
+
+        return {
+            "status": "success",
+            "count": len(curated_pool[:limit]),
+            "news": curated_pool[:limit]
+        }
+
+    # 2. STANDARD NEWSPAPER SOURCES
     fetch_map = {
         'prothomalo': fetch_prothomalo_live,
         'bbc': fetch_bbc_live,
@@ -630,16 +652,10 @@ def get_news(
         'bdnews24': fetch_bdnews24_live
     }
 
-    if source == 'newsbangla':
-        # Curate directly from pristine local repository and live scrapers!
-        local_items = load_pristine_catalog()
-        for it in local_items:
-            c_it = curate_into_newsbangla(it)
-            news.append(c_it)
-    elif source and source != 'all' and source in fetch_map:
+    if source and source != 'all' and source in fetch_map:
         news.extend(fetch_map[source](now_ts))
     else:
-        # Run all scrapers concurrently in parallel threads so entire API finishes in 2.5 seconds!
+        # Run all scrapers concurrently in parallel threads
         with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
             future_to_source = {executor.submit(fn, now_ts): s_id for s_id, fn in fetch_map.items()}
             for future in concurrent.futures.as_completed(future_to_source):
@@ -649,7 +665,7 @@ def get_news(
                 except Exception:
                     pass
 
-    # Fallback to local initial news if live fetch count is low
+    # Fallback to local catalog if live fetch count is low
     if len(news) < 5:
         local_items = load_pristine_catalog()
         for it in local_items:
@@ -667,34 +683,17 @@ def get_news(
         seen.add(l)
         clean_news.append(item)
 
-    # If NewsBangla source is selected ("এখানে পত্রিকা ক্যাটাগরিতে আর একটি নাম যোগ হবে NewsBangla এখানে ক্লিক করলে ক্যাটাগরি অনুযায়ী প্রতিটি বিভাগে অন্য পত্রিকার খবর থেকে নিজের মতো করে কিছু মূল খবর তৈরী করে প্রদর্শন করবে সাথে খবরের ছবিটিও নিজের মতো খবর রিলেটেড নতুন ছবি দিবে")
-    if source == 'newsbangla':
-        curated_pool = []
-        seen_t = set()
-        for item in clean_news:
-            if item.get('source_id') != 'newsbangla':
-                c_item = curate_into_newsbangla(item)
-                if c_item['title'] not in seen_t:
-                    seen_t.add(c_item['title'])
-                    curated_pool.append(c_item)
-
-        try:
-            local_json_path = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
-            if os.path.exists(local_json_path):
-                with open(local_json_path, "r", encoding="utf-8") as f:
-                    local_items = json.load(f)
-                    for it in local_items:
-                        c_item = curate_into_newsbangla(it)
-                        if c_item['title'] not in seen_t:
-                            seen_t.add(c_item['title'])
-                            curated_pool.append(c_item)
-        except Exception:
-            pass
-        clean_news = curated_pool
-
-    # If a specific category was requested, filter directly from clean_news
+    # Filter by category if requested
     if category and category != 'all':
         cat_items = [n for n in clean_news if n.get('category') == category]
+        if len(cat_items) < 5:
+            local_items = load_pristine_catalog()
+            seen_links = set(n.get('link') for n in cat_items)
+            for it in local_items:
+                if it.get('category') == category:
+                    if (not source or source == 'all' or it.get('source_id') == source) and it.get('link') not in seen_links:
+                        seen_links.add(it.get('link'))
+                        cat_items.append(it)
         clean_news = cat_items
 
     return {
@@ -703,17 +702,6 @@ def get_news(
         "news": clean_news[:limit]
     }
 
-
-def is_video_or_bulletin(txt):
-    if not txt: return False
-    video_patterns = [
-        r'ভিডিও\s*বার্তা', r'ভিডিওতে\s*দেখুন', r'ভিডিও\s*(দেখুন|সহ|লিংক)',
-        r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'টকশো'
-    ]
-    for pat in video_patterns:
-        if re.search(pat, txt, re.IGNORECASE):
-            return True
-    return False
 
 @app.get("/api/article")
 def get_article(url: str = Query(...)):
