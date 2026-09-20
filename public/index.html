@@ -8923,9 +8923,18 @@ function calculateTimeAgo(timestamp) {
     }
 
 function selectSource(sourceId) {
-      // NewsBangla Requirement:
-      // "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
       currentSource = sourceId;
+      if (sourceId === 'newsbangla') {
+        // Auto-switch to 'all' categories so user immediately sees all published NewsBangla articles!
+        currentCategory = 'all';
+        document.querySelectorAll('.category-chip').forEach(function(chip) {
+          if (chip.getAttribute('data-category') === 'all') {
+            chip.classList.add('active');
+          } else {
+            chip.classList.remove('active');
+          }
+        });
+      }
       document.querySelectorAll('.bottom-source-btn').forEach(function(btn) {
         if (btn.getAttribute('data-source') === sourceId) {
           btn.classList.add('active');
@@ -9410,6 +9419,11 @@ function selectSource(sourceId) {
             return item.published === true || (item.published_at && item.published_at > 0);
           }
           return true;
+        });
+      } else if (currentSource === 'newsbangla') {
+        // In NewsBangla page, match both source_id === 'newsbangla' and is_custom
+        items = items.filter(function(item) {
+          return item.source_id === 'newsbangla' || item.is_custom;
         });
       } else {
         items = items.filter(function(item) { return item.source_id === currentSource; });
