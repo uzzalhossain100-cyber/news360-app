@@ -9457,50 +9457,113 @@
 
     
     // Direct Deep Link Resolver: Automatically opens article when link is visited or pasted
-    function checkAndOpenArticleFromUrl() {
+    async function checkAndOpenArticleFromUrl() {
       try {
+        // Also support clean pathname like /article/custom_... or /article/...
+        let articleId = null;
+        let articleLink = null;
+        
+        const pathMatches = window.location.pathname.match(/^\/article\/(.+)$/);
+        if (pathMatches && pathMatches[1]) {
+          articleId = decodeURIComponent(pathMatches[1]);
+        }
+
         const params = new URLSearchParams(window.location.search);
-        const articleId = params.get('article');
-        const articleLink = params.get('link');
+        if (!articleId && params.get('article')) {
+          articleId = params.get('article');
+        }
+        if (params.get('link')) {
+          articleLink = params.get('link');
+        }
 
         if (!articleId && !articleLink) return;
 
-        function tryFindAndOpen() {
-          let found = null;
-          const targetId = articleId ? decodeURIComponent(articleId).trim() : '';
-          const targetLink = articleLink ? decodeURIComponent(articleLink).trim() : '';
+        const targetId = articleId ? decodeURIComponent(articleId).trim() : '';
+        const targetLink = articleLink ? decodeURIComponent(articleLink).trim() : '';
 
-          // 1. Search in local / admin custom articles
+        function searchLocalAndLoaded() {
+          // 1. Check customArticles in localStorage
           const customArticles = getCustomArticles();
           if (targetId) {
-            found = customArticles.find(it => it.id === targetId);
+            const f = customArticles.find(it => it.id === targetId);
+            if (f) return f;
           }
-          if (!found && targetLink) {
-            found = customArticles.find(it => it.link === targetLink || it.id === targetLink);
-          }
-
-          // 2. Search in all loaded news items
-          if (!found && targetId) {
-            found = allNewsItems.find(it => it.id === targetId || it.id === ('newsbangla-' + targetId));
-          }
-          if (!found && targetLink) {
-            found = allNewsItems.find(it => it.link === targetLink || it.id === targetLink);
+          if (targetLink) {
+            const f = customArticles.find(it => it.link === targetLink || it.id === targetLink);
+            if (f) return f;
           }
 
-          if (found) {
-            openArticleModal(found);
-            return true;
+          // 2. Check all loaded news items
+          if (targetId) {
+            const f = allNewsItems.find(it => it.id === targetId || it.id === ('newsbangla-' + targetId));
+            if (f) return f;
           }
-          return false;
+          if (targetLink) {
+            const f = allNewsItems.find(it => it.link === targetLink || it.id === targetLink);
+            if (f) return f;
+          }
+          return null;
         }
 
-        // Try immediately
-        if (!tryFindAndOpen()) {
-          // Retry after API news load completes
-          setTimeout(tryFindAndOpen, 800);
-          setTimeout(tryFindAndOpen, 1800);
-          setTimeout(tryFindAndOpen, 3000);
+        let found = searchLocalAndLoaded();
+        if (found) {
+          openArticleModal(found);
+          return;
         }
+
+        // If not found yet, proactively fetch server admin articles immediately!
+        try {
+          const sResp = await fetch('/admin_news.json?_t=' + Date.now());
+          if (sResp.ok) {
+            const sArticles = await sResp.json();
+            if (Array.isArray(sArticles)) {
+              if (targetId) found = sArticles.find(it => it.id === targetId);
+              if (!found && targetLink) found = sArticles.find(it => it.link === targetLink || it.id === targetLink);
+              if (found) {
+                openArticleModal(found);
+                return;
+              }
+            }
+          }
+        } catch (e) {}
+
+        // Fallback: Query /api/article directly if it has a real URL link
+        if (!found && (targetLink || (targetId && targetId.startsWith('http')))) {
+          const fetchUrl = targetLink || targetId;
+          try {
+            const artResp = await fetch('/api/article?url=' + encodeURIComponent(fetchUrl));
+            if (artResp.ok) {
+              const artData = await artResp.json();
+              if (artData && artData.title) {
+                const tempItem = {
+                  id: fetchUrl,
+                  title: artData.title,
+                  link: fetchUrl,
+                  image: artData.image || '',
+                  paragraphs: artData.paragraphs || [],
+                  source_name: 'অনলাইন ডেস্ক',
+                  source_badge: 'News',
+                  source_color: '#dc2626',
+                  category: 'national',
+                  timestamp: Date.now() / 1000
+                };
+                openArticleModal(tempItem);
+                return;
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Periodic checks after news items populate in background
+        const checkInterval = setInterval(function() {
+          const f = searchLocalAndLoaded();
+          if (f) {
+            clearInterval(checkInterval);
+            openArticleModal(f);
+          }
+        }, 500);
+        setTimeout(function() { clearInterval(checkInterval); }, 5000);
+
       } catch (e) {
         console.warn('URL routing check error:', e);
       }

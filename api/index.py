@@ -25,6 +25,34 @@ app.add_middleware(
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 headers_bot = {'User-Agent': 'facebookexternalhit/1.1'}
 
+def is_video_or_bulletin(t):
+    if not t: return False
+    video_patterns = [
+        r'ভিডিও\s*বার্তা',
+        r'ভিডিওতে\s*দেখুন',
+        r'ভিডিও\s*(দেখুন|সহ|লিংক)',
+        r'লাইভ\s*ভিডিও',
+        r'ভিডিও\s*ভাইরাল',
+        r'ভাইরাল\s*ভিডিও',
+        r'ভিডিও\s*ফুটেজ',
+        r'ভিডিও\s*প্রতিবেদন',
+        r'ভিডিও\s*স্টোরি',
+        r'ভিডিও\s*সংবাদ',
+        r'ভিডিও\s*বুলেটিন',
+        r'ভিডিও\s*ফিচার',
+        r'\[ভিডিও\]',
+        r'\(ভিডিও\)',
+        r'\{ভিডিও\}',
+        r'(সকাল|দুপুর|সন্ধ্যা|রাত|রাতের|দিনের)\s*(৭|৮|৯|১০|১১|১২|১|২|৩|৪|৫|৬|\d+)\s*টার\s*(সংবাদ|বুলেটিন|খবর)',
+        r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'সংবাদ\s*সারসংক্ষেপ',
+        r'লাইভ\s*আপডেট', r'সরাসরি\s*দেখুন', r'টকশো', r'টক\s*শো',
+        r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+'
+    ]
+    for pat in video_patterns:
+        if re.search(pat, t, re.IGNORECASE):
+            return True
+    return False
+
 def is_clean_headline(t, u=""):
     if not t or len(t) < 14: return False
     url_lower = (u or "").lower()
@@ -708,10 +736,21 @@ def get_news(
 # SOCIAL MEDIA SHARE PREVIEW ENDPOINT (Facebook, WhatsApp, Messenger, Twitter)
 # Generates dynamic OpenGraph tags with the real article headline and thumbnail image
 # ---------------------------------------------------------------------------
-def render_social_share_page(article_id: str, direct_link: Optional[str] = None):
+def render_social_share_page(article_id: str, direct_link: Optional[str] = None, request: Optional[Request] = None):
     found_item = None
     target_id = article_id.strip() if article_id else ""
     target_link = direct_link.strip() if direct_link else ""
+
+    # Check User-Agent: Is this a social bot (Facebook, WhatsApp, Twitter, Telegram) or a real human visitor?
+    user_agent = ""
+    if request and request.headers:
+        user_agent = request.headers.get("user-agent", "").lower()
+
+    social_bot_signatures = [
+        "facebookexternalhit", "facebot", "whatsapp", "twitterbot",
+        "telegrambot", "linkedinbot", "slackbot", "discordbot", "pinterest"
+    ]
+    is_social_bot = any(bot in user_agent for bot in social_bot_signatures)
 
     # 1. Search in Admin Persisted Articles
     try:
@@ -748,7 +787,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
         desc = paras[0][:200] if paras else f"{title} সম্পর্কে বিস্তারিত পড়ুন NewsBangla-তে।"
         raw_image = found_item.get("image") or ""
         
-        # If image is base64 data URI, route through /api/article-image/{id} so Facebook/WhatsApp can crawl a real HTTP image URL
+        # If image is base64 data URI, route through /api/article-image/{id}
         if raw_image.startswith("data:"):
             image = f"https://newsbangla.vercel.app/api/article-image/{target_id}"
         elif raw_image.startswith("http"):
@@ -760,14 +799,19 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
         desc = "বাংলাদেশের সর্বাধুনিক অনলাইন সংবাদ মাধ্যম NewsBangla।"
         image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
 
+    canonical_share_url = f"https://newsbangla.vercel.app/article/{target_id or 'news'}"
+    app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
+
+    # If a real human clicks the link from Facebook/browser, instantly 302 redirect them to the article view!
+    if not is_social_bot:
+        return Response(status_code=302, headers={"Location": app_redirect_url})
+
     import html
     escaped_title = html.escape(title)
     escaped_desc = html.escape(desc)
     escaped_image = html.escape(image)
-    
-    canonical_share_url = f"https://newsbangla.vercel.app/article/{target_id or 'news'}"
-    app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
 
+    # For social bots (Facebook Scraper, WhatsApp, Twitter, etc.), return pure OpenGraph metadata
     html_content = f"""<!DOCTYPE html>
 <html lang="bn" prefix="og: http://ogp.me/ns#">
 <head>
@@ -792,31 +836,24 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
     <meta name="twitter:title" content="{escaped_title}">
     <meta name="twitter:description" content="{escaped_desc}">
     <meta name="twitter:image" content="{escaped_image}">
-
-    <!-- Instant client redirect to full article in app/web -->
-    <meta http-equiv="refresh" content="0;url={app_redirect_url}">
-    <script>
-        window.location.replace("{app_redirect_url}");
-    </script>
 </head>
 <body style="font-family:'Hind Siliguri', sans-serif; background:#f8fafc; color:#0f172a; padding:40px 20px; text-align:center;">
-    <div style="max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
-        <img src="{escaped_image}" alt="{escaped_title}" style="max-width:100%; height:auto; border-radius:10px; margin-bottom:16px; object-fit:cover; max-height:300px;">
-        <h1 style="font-size:20px; line-height:1.4; color:#0f172a; margin-bottom:12px;">{escaped_title}</h1>
-        <p style="font-size:14px; color:#475569; line-height:1.6; margin-bottom:20px;">{escaped_desc}</p>
-        <a href="{app_redirect_url}" style="display:inline-block; background:#dc2626; color:#ffffff; text-decoration:none; padding:10px 22px; border-radius:30px; font-weight:700; font-size:14px;">সম্পূর্ণ খবর পড়ুন</a>
+    <div style="max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:24px;">
+        <img src="{escaped_image}" alt="{escaped_title}" style="max-width:100%; height:auto; border-radius:10px; margin-bottom:16px;">
+        <h1 style="font-size:20px; line-height:1.4;">{escaped_title}</h1>
+        <p style="font-size:14px; color:#475569;">{escaped_desc}</p>
     </div>
 </body>
 </html>"""
     return Response(content=html_content, media_type="text/html; charset=utf-8")
 
 @app.get("/api/share")
-def share_article_endpoint(article: Optional[str] = Query(None), link: Optional[str] = Query(None)):
-    return render_social_share_page(article or "", link or "")
+def share_article_endpoint(request: Request, article: Optional[str] = Query(None), link: Optional[str] = Query(None)):
+    return render_social_share_page(article or "", link or "", request)
 
 @app.get("/article/{article_id}")
-def direct_article_share_endpoint(article_id: str):
-    return render_social_share_page(article_id)
+def direct_article_share_endpoint(article_id: str, request: Request):
+    return render_social_share_page(article_id, None, request)
 
 @app.get("/api/article-image/{article_id}")
 def serve_article_image(article_id: str):
@@ -835,7 +872,6 @@ def serve_article_image(article_id: str):
         img_str = found_item.get("image")
         if img_str.startswith("data:"):
             try:
-                # parse data:image/xxx;base64,...
                 header, b64_data = img_str.split(",", 1)
                 mime = "image/jpeg"
                 if "png" in header: mime = "image/png"
@@ -847,7 +883,6 @@ def serve_article_image(article_id: str):
         elif img_str.startswith("http"):
             return Response(status_code=302, headers={"Location": img_str})
 
-    # Default fallback image
     return Response(status_code=302, headers={"Location": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"})
 
 
