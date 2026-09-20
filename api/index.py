@@ -590,6 +590,17 @@ def get_news(
     }
 
 
+def is_video_or_bulletin(txt):
+    if not txt: return False
+    video_patterns = [
+        r'ভিডিও\s*বার্তা', r'ভিডিওতে\s*দেখুন', r'ভিডিও\s*(দেখুন|সহ|লিংক)',
+        r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'টকশো'
+    ]
+    for pat in video_patterns:
+        if re.search(pat, txt, re.IGNORECASE):
+            return True
+    return False
+
 @app.get("/api/article")
 def get_article(url: str = Query(...)):
     paras = []
