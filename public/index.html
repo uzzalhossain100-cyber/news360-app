@@ -9332,7 +9332,7 @@
                 (isPub 
                   ? '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); togglePublishArticle(\'' + item.id + '\')" style="background:#475569; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer;" title="আনপাবলিশ করুন">আনপাবলিশ</button>'
                   : '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); togglePublishArticle(\'' + item.id + '\')" style="background:#16a34a; color:white; border:none; border-radius:5px; padding:3px 9px; font-size:11px; font-weight:700; cursor:pointer;" title="পাবলিশ করুন">পাবলিশ</button>') +
-                '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); switchPage(\'admin\'); setTimeout(function(){ editCustomArticle(\'' + item.id + '\'); }, 150);" style="background:#2563eb; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer;">এডিট</button>' +
+                '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); openQuickEditModal(\'' + item.id + '\');" style="background:#2563eb; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer;">এডিট</button>' +
                 '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); deleteCustomArticle(\'' + item.id + '\')" style="background:#dc2626; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer;">ডিলিট</button>' +
               '</div>' +
             '</div>';
@@ -10515,7 +10515,163 @@
       updateTicker();
     }
 
-    function editCustomArticle(id) {
+    
+    // ----------------------------------------------------
+    // Quick Edit News Modal System (User Requirement):
+    // "NewsBangla পেজে এডমিন যখন কোন খবর এডিট বাটনে ক্লিক করবেন তখন শিরোনম লিখুন বক্সে শিরোনাম,
+    // উৎস (সংবাদমাধ্যম) এ উৎস, ক্যাটাগরি তে ক্যাটাগরি, প্রকাশের তারিখ ও সময় নির্বাচন করুন এ সময় ও তারিখ
+    // এবং বিস্তারিত খবর লিখুন বক্সে বিস্তারিত খবর আসবে তখন এডমিন চাইলে সেগুলো এডিট করে পাবলিশ করতে পারবেন।"
+    // ----------------------------------------------------
+    let quickEditUploadedBase64 = '';
+
+    function openQuickEditModal(id) {
+      const customArticles = getAdminCustomArticles();
+      let item = customArticles.find(a => a.id === id);
+
+      // If not in customArticles yet (e.g. from allNewsItems), create editable reference
+      if (!item) {
+        item = allNewsItems.find(a => a.id === id || a.id === ('newsbangla-' + id));
+      }
+      if (!item) return;
+
+      document.getElementById('quickEditArticleId').value = item.id;
+      document.getElementById('quickEditTitle').value = item.title || '';
+      document.getElementById('quickEditSource').value = item.source_name || 'NewsBangla';
+      document.getElementById('quickEditCategory').value = item.category || 'national';
+      
+      const paragraphs = item.paragraphs || [item.title || ''];
+      document.getElementById('quickEditContent').value = paragraphs.join('\n\n');
+
+      // Set datetime
+      const effectiveTs = item.published_at || item.timestamp || Math.floor(Date.now() / 1000);
+      const dt = new Date(effectiveTs * 1000);
+      dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
+      document.getElementById('quickEditDateTime').value = dt.toISOString().slice(0, 16);
+
+      // Set image preview
+      quickEditUploadedBase64 = '';
+      const imgPreview = document.getElementById('quickEditImagePreview');
+      if (item.image) {
+        imgPreview.src = item.image;
+        imgPreview.style.display = 'block';
+      } else {
+        imgPreview.src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&auto=format&fit=crop&q=80';
+      }
+
+      // Show modal
+      const modal = document.getElementById('quickEditNewsModal');
+      if (modal) {
+        modal.style.display = 'flex';
+      }
+    }
+
+    function closeQuickEditModal() {
+      const modal = document.getElementById('quickEditNewsModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    function handleQuickEditImageUpload(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          const maxDim = 1000;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          quickEditUploadedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          document.getElementById('quickEditImagePreview').src = quickEditUploadedBase64;
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function submitQuickEditForm(andPublish) {
+      const id = document.getElementById('quickEditArticleId').value;
+      const title = document.getElementById('quickEditTitle').value.trim();
+      const source = document.getElementById('quickEditSource').value.trim();
+      const category = document.getElementById('quickEditCategory').value;
+      const dateTimeVal = document.getElementById('quickEditDateTime').value;
+      const content = document.getElementById('quickEditContent').value.trim();
+
+      if (!title || !source || !content) {
+        alert('অনুগ্রহ করে শিরোনাম, উৎস ও বিস্তারিত খবর লিখুন।');
+        return;
+      }
+
+      let pubTimestamp = Math.floor(Date.now() / 1000);
+      if (dateTimeVal) {
+        const dt = new Date(dateTimeVal);
+        if (!isNaN(dt.getTime())) {
+          pubTimestamp = Math.floor(dt.getTime() / 1000);
+        }
+      }
+
+      const customArticles = getAdminCustomArticles();
+      let index = customArticles.findIndex(a => a.id === id);
+
+      let targetItem;
+      if (index !== -1) {
+        targetItem = customArticles[index];
+      } else {
+        // If it was loaded from elsewhere, convert into custom managed article
+        targetItem = {
+          id: id || ('custom_' + Date.now()),
+          link: 'https://newsbangla.vercel.app/article/' + (id || ('custom_' + Date.now())),
+          source_id: 'newsbangla',
+          source_color: '#e11d48',
+          is_custom: true,
+          hidden: false
+        };
+        customArticles.unshift(targetItem);
+        index = 0;
+      }
+
+      targetItem.title = title;
+      targetItem.source_name = source;
+      targetItem.source_badge = source;
+      targetItem.category = category;
+      targetItem.timestamp = pubTimestamp;
+      targetItem.paragraphs = content.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+
+      if (quickEditUploadedBase64) {
+        targetItem.image = quickEditUploadedBase64;
+      } else if (!targetItem.image) {
+        targetItem.image = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80';
+      }
+
+      if (andPublish) {
+        targetItem.published = true;
+        targetItem.published_at = Math.floor(Date.now() / 1000);
+        targetItem.time_ago = 'এইমাত্র';
+        showToast('✓ সংবাদটি সফলভাবে সংরক্ষিত ও লাইভ পাবলিশ করা হয়েছে!');
+      } else {
+        targetItem.time_ago = targetItem.published ? calculateTimeAgo(targetItem.published_at || pubTimestamp) : 'আনপাবলিশড';
+        showToast('✓ সংবাদটি ড্রাফট হিসেবে সংরক্ষিত হয়েছে।');
+      }
+
+      saveAdminCustomArticles(customArticles);
+      integrateCustomArticles();
+      closeQuickEditModal();
+      renderNewsGrid();
+      if (activePage === 'admin') {
+        renderAdminNewsList();
+      }
+      updateTicker();
+    }
+
+function editCustomArticle(id) {
       const customArticles = getAdminCustomArticles();
       const item = customArticles.find(a => a.id === id);
       if (!item) return;
@@ -10681,7 +10837,7 @@
           html += '    <button onclick="togglePublishArticle(\'' + item.id + '\')" style="background:linear-gradient(135deg, #16a34a, #15803d); color:white; border:none; border-radius:8px; padding:7px 16px; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 3px 8px rgba(22,163,74,0.3);" title="খবরটি সবার জন্য প্রকাশ করুন"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg> পাবলিশ করুন</button>';
         }
         // 2. Edit Button
-        html += '    <button onclick="editCustomArticle(\'' + item.id + '\')" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> এডিট</button>';
+        html += '    <button onclick="openQuickEditModal(\'' + item.id + '\')" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> এডিট</button>';
         // 3. Delete Button
         html += '    <button onclick="deleteCustomArticle(\'' + item.id + '\')" style="background:#dc2626; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> ডিলিট</button>';
         html += '  </div>';
@@ -10842,6 +10998,84 @@
         <button type="button" onclick="closeAdminDeleteModal()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: var(--text-main, #334155); font-weight: 700; font-size: 13.5px; cursor: pointer;">না, রাখুন</button>
         <button type="button" onclick="confirmDeleteArticleExecute()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);">হ্যাঁ, ডিলিট করুন</button>
       </div>
+  <!-- Standalone Quick Edit News Modal for NewsBangla & Admin -->
+  <div id="quickEditNewsModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 2147483647; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;">
+    <div style="background: var(--bg-card, #ffffff); border-radius: 18px; max-width: 650px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 1px solid var(--border-color, #e2e8f0); position: relative; margin: auto;">
+      
+      <!-- Modal Header -->
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 14px; margin-bottom: 18px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center;">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+          </div>
+          <div>
+            <h3 id="quickEditModalTitle" style="margin: 0; font-size: 17.5px; font-weight: 800; color: var(--text-main, #0f172a);">সংবাদ সম্পাদনা ও প্রকাশ</h3>
+            <span style="font-size: 12px; color: var(--text-muted, #64748b);">তথ্য পরিবর্তন করে সরাসরি পাবলিশ করুন</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeQuickEditModal()" style="background: none; border: none; font-size: 26px; color: var(--text-muted); cursor: pointer; padding: 0 6px; line-height: 1;">&times;</button>
+      </div>
+
+      <!-- Edit Form -->
+      <form id="quickEditArticleForm" onsubmit="handleQuickEditSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <input type="hidden" id="quickEditArticleId">
+
+        <!-- 1. শিরোনাম লিখুন -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">শিরোনাম লিখুন <span style="color:#e11d48;">*</span></label>
+          <input type="text" id="quickEditTitle" required placeholder="সংবাদের শিরোনাম..." style="width: 100%; box-sizing: border-box; padding: 11px 14px; font-size: 15px; font-weight: 600; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+        </div>
+
+        <!-- 2. উৎস ও ক্যাটাগরি -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">উৎস (সংবাদমাধ্যম) <span style="color:#e11d48;">*</span></label>
+            <input type="text" id="quickEditSource" required placeholder="যেমন: NewsBangla" style="width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">ক্যাটাগরি <span style="color:#e11d48;">*</span></label>
+            <select id="quickEditCategory" required style="width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none; cursor: pointer;">
+              <option value="national">জাতীয়</option>
+              <option value="international">আন্তর্জাতিক</option>
+              <option value="sports">খেলাধুলা</option>
+              <option value="tech">তথ্যপ্রযুক্তি</option>
+              <option value="entertainment">বিনোদন</option>
+              <option value="economy">অর্থনীতি</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 3. প্রকাশের তারিখ ও সময় নির্বাচন করুন -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">প্রকাশের তারিখ ও সময় নির্বাচন করুন <span style="color:#e11d48;">*</span></label>
+          <input type="datetime-local" id="quickEditDateTime" required style="width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); outline: none;">
+        </div>
+
+        <!-- 4. বিস্তারিত খবর লিখুন -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a);">বিস্তারিত খবর লিখুন <span style="color:#e11d48;">*</span></label>
+          <textarea id="quickEditContent" required placeholder="খবরের বিস্তারিত বিবরণ লিখুন..." style="width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color, #e2e8f0); background: var(--bg-primary, #f8fafc); color: var(--text-main, #0f172a); min-height: 160px; resize: vertical; line-height: 1.6; outline: none;"></textarea>
+        </div>
+
+        <!-- Image preview / change -->
+        <div style="display: flex; align-items: center; gap: 14px; background: var(--bg-primary, #f8fafc); padding: 12px; border-radius: 10px; border: 1px dashed var(--border-color, #e2e8f0);">
+          <img id="quickEditImagePreview" src="" style="width: 80px; height: 56px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color, #e2e8f0); background: #eee;">
+          <div style="flex: 1;">
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--text-main, #0f172a); margin-bottom: 4px;">ছবি পরিবর্তন (গ্যালারি থেকে)</div>
+            <input type="file" id="quickEditImageFile" accept="image/*" onchange="handleQuickEditImageUpload(event)" style="font-size: 12px; color: var(--text-muted, #64748b);">
+          </div>
+        </div>
+
+        <!-- Modal Actions -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; border-top: 1px solid var(--border-color, #e2e8f0); padding-top: 14px; flex-wrap: wrap;">
+          <button type="button" onclick="closeQuickEditModal()" style="background: var(--bg-primary, #f8fafc); border: 1.5px solid var(--border-color, #e2e8f0); color: var(--text-main, #0f172a); border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;">বাতিল</button>
+          <button type="button" onclick="submitQuickEditForm(false)" style="background: #2563eb; color: white; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">✓ ড্রাফট সেভ করুন</button>
+          <button type="button" onclick="submitQuickEditForm(true)" style="background: linear-gradient(135deg, #16a34a, #15803d); color: white; border: none; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(22,163,74,0.25);">🚀 সেভ ও সরাসরি পাবলিশ করুন</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
     </div>
   </div>
 
