@@ -1216,6 +1216,10 @@ GITHUB_PATH = "public/admin_news.json"
 LOCAL_STATIC_FILE = os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json")
 
 def read_persisted_admin_articles():
+    global _MEM_ADMIN_ARTICLES
+    if _MEM_ADMIN_ARTICLES is not None:
+        return _MEM_ADMIN_ARTICLES
+
     # 1. Try reading from GitHub raw URL directly (Always current across any cloud instance)
     try:
         raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{GITHUB_PATH}?_t={int(time.time())}"
@@ -1235,7 +1239,12 @@ def read_persisted_admin_articles():
 
     return []
 
+# Global in-memory cache across serverless invocations on the same instance
+_MEM_ADMIN_ARTICLES = None
+
 def write_persisted_admin_articles(articles):
+    global _MEM_ADMIN_ARTICLES
+    _MEM_ADMIN_ARTICLES = articles
     # Save to GitHub via REST API
     import base64
     try:
