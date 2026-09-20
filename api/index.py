@@ -64,148 +64,135 @@ def get_news(
     news = []
     now = time.time()
     
-    # 1. Prothom Alo (Full Real News Photos from Official RSS)
-    try:
-        req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:30]:
-                t = it.find('title').text.strip()
-                l = it.find('link').text.strip()
-                img = ''
-                content = it.find('{http://search.yahoo.com/mrss/}content')
-                if content is not None and 'url' in content.attrib:
-                    img = content.attrib['url']
-                if not img:
-                    thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
-                    if thumb is not None and 'url' in thumb.attrib:
-                        img = thumb.attrib['url']
-                
-                if not img or 'defaultog' in img:
-                    img = 'https://media.prothomalo.com/prothomalo-bangla/2024-09-22/5lwyn5je/defaultog.jpg'
-                    
-                cat = detect_cat(t)
-                news.append({
-                    "id": l,
-                    "title": t,
-                    "link": l,
-                    "timestamp": now,
-                    "category": cat,
-                    "source_id": "prothomalo",
-                    "source_name": "প্রথম আলো",
-                    "source_badge": "Prothom Alo",
-                    "source_color": "#e11d48",
-                    "image": img
-                })
-    except Exception:
-        pass
+        # Dynamic multi-source configuration
+    ALL_NEWSPAPER_CONFIGS = [
+        {
+            "id": "prothomalo",
+            "name": "প্রথম আলো",
+            "badge": "Prothom Alo",
+            "color": "#e11d48",
+            "feed": "https://www.prothomalo.com/feed",
+            "is_direct_rss": True,
+            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
+        },
+        {
+            "id": "bbc",
+            "name": "বিবিসি বাংলা",
+            "badge": "BBC Bangla",
+            "color": "#dc2626",
+            "feed": "https://feeds.bbci.co.uk/bengali/rss.xml",
+            "is_direct_rss": True,
+            "fallback_img": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80"
+        },
+        {
+            "id": "bdpratidin",
+            "name": "বাংলাদেশ প্রতিদিন",
+            "badge": "BD Pratidin",
+            "color": "#16a34a",
+            "feed": "https://news.google.com/rss/search?q=site:bd-pratidin.com&hl=bn&gl=BD&ceid=BD:bn",
+            "is_direct_rss": False,
+            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
+        },
+        {
+            "id": "ittefaq",
+            "name": "দৈনিক ইত্তেফাক",
+            "badge": "Ittefaq",
+            "color": "#2563eb",
+            "feed": "https://news.google.com/rss/search?q=site:ittefaq.com.bd&hl=bn&gl=BD&ceid=BD:bn",
+            "is_direct_rss": False,
+            "fallback_img": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80"
+        },
+        {
+            "id": "kalerkantho",
+            "name": "কালের কণ্ঠ",
+            "badge": "Kaler Kantho",
+            "color": "#d97706",
+            "feed": "https://news.google.com/rss/search?q=site:kalerkantho.com&hl=bn&gl=BD&ceid=BD:bn",
+            "is_direct_rss": False,
+            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
+        },
+        {
+            "id": "jugantor",
+            "name": "দৈনিক যুগান্তর",
+            "badge": "Jugantor",
+            "color": "#e11d48",
+            "feed": "https://news.google.com/rss/search?q=site:jugantor.com&hl=bn&gl=BD&ceid=BD:bn",
+            "is_direct_rss": False,
+            "fallback_img": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80"
+        },
+        {
+            "id": "bdnews24",
+            "name": "বিডিনিউজ টোয়েন্টিফোর",
+            "badge": "BDNews24",
+            "color": "#7c3aed",
+            "feed": "https://news.google.com/rss/search?q=site:bangla.bdnews24.com&hl=bn&gl=BD&ceid=BD:bn",
+            "is_direct_rss": False,
+            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
+        }
+    ]
 
-    # 2. BBC Bangla
-    try:
-        req = urllib.request.Request("https://feeds.bbci.co.uk/bengali/rss.xml", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:20]:
-                t = it.find('title').text.strip()
-                l = it.find('link').text.strip()
-                thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
-                img = thumb.attrib['url'] if thumb is not None and 'url' in thumb.attrib else 'https://ichef.bbci.co.uk/news/1200/branded_bengali/262b/live/51c55dd0-b30a-11f1-ba3a-274c672664f6.jpg'
-                cat = detect_cat(t)
-                news.append({
-                    "id": l,
-                    "title": t,
-                    "link": l,
-                    "timestamp": now,
-                    "category": cat,
-                    "source_id": "bbc",
-                    "source_name": "বিবিসি বাংলা",
-                    "source_badge": "BBC Bangla",
-                    "source_color": "#dc2626",
-                    "image": img
-                })
-    except Exception:
-        pass
+    # If user selected a specific newspaper, prioritize fetching that newspaper directly!
+    target_configs = ALL_NEWSPAPER_CONFIGS
+    if source and source != 'all':
+        matched = [cfg for cfg in ALL_NEWSPAPER_CONFIGS if cfg["id"] == source]
+        if matched:
+            target_configs = matched
 
-    # 3. Channel 24 (Live Official Feed with Real News Images)
-    try:
-        req = urllib.request.Request("https://www.youtube.com/feeds/videos.xml?channel_id=UCHLqIOMPk20w-6cFgkA90jw", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            root = ET.fromstring(r.read())
-            for entry in root.findall('{http://www.w3.org/2005/Atom}entry')[:15]:
-                t = entry.find('{http://www.w3.org/2005/Atom}title').text.strip()
-                l = entry.find('{http://www.w3.org/2005/Atom}link').attrib.get('href', '')
-                media_group = entry.find('{http://search.yahoo.com/mrss/}group')
-                thumb = media_group.find('{http://search.yahoo.com/mrss/}thumbnail')
-                img = thumb.attrib.get('url', '') if thumb is not None else ''
-                if not is_clean_headline(t): continue
-                news.append({
-                    "id": l,
-                    "title": t,
-                    "link": l,
-                    "timestamp": now,
-                    "category": detect_cat(t),
-                    "source_id": "channel24",
-                    "source_name": "চ্যানেল ২৪",
-                    "source_badge": "Channel 24",
-                    "source_color": "#0284c7",
-                    "image": img
-                })
-    except Exception:
-        pass
+    for cfg in target_configs:
+        try:
+            req = urllib.request.Request(cfg["feed"], headers=headers_browser)
+            with urllib.request.urlopen(req, timeout=4) as r:
+                root = ET.fromstring(r.read())
+                for it in root.findall('.//item')[:30]:
+                    title_elem = it.find('title')
+                    link_elem = it.find('link')
+                    if title_elem is None or not title_elem.text: continue
+                    t = title_elem.text.strip()
+                    # Clean source prefix/suffix e.g. " - কালের কণ্ঠ" or " - বাংলাদেশ প্রতিদিন"
+                    t = re.sub(r'\s*-\s*(কালের কণ্ঠ|বাংলাদেশ প্রতিদিন|ইত্তেফাক|যুগান্তর|Prothom Alo|প্রথম আলো|BBC News বাংলা|bdnews24).*$', '', t)
+                    if not is_clean_headline(t): continue
 
-    # 4. NTV News (Live Official Feed with Real News Images)
-    try:
-        req = urllib.request.Request("https://www.youtube.com/feeds/videos.xml?channel_id=UCUDQdVsKssximyFwg4IxnOQ", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            root = ET.fromstring(r.read())
-            for entry in root.findall('{http://www.w3.org/2005/Atom}entry')[:15]:
-                t = entry.find('{http://www.w3.org/2005/Atom}title').text.strip()
-                l = entry.find('{http://www.w3.org/2005/Atom}link').attrib.get('href', '')
-                media_group = entry.find('{http://search.yahoo.com/mrss/}group')
-                thumb = media_group.find('{http://search.yahoo.com/mrss/}thumbnail')
-                img = thumb.attrib.get('url', '') if thumb is not None else ''
-                if not is_clean_headline(t): continue
-                news.append({
-                    "id": l,
-                    "title": t,
-                    "link": l,
-                    "timestamp": now,
-                    "category": detect_cat(t),
-                    "source_id": "ntv",
-                    "source_name": "এনটিভি",
-                    "source_badge": "NTV",
-                    "source_color": "#16a34a",
-                    "image": img
-                })
-    except Exception:
-        pass
+                    l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
+                    if not l: continue
 
-    # 5. RTV (Live Official Feed with Real News Images)
-    try:
-        req = urllib.request.Request("https://www.youtube.com/feeds/videos.xml?channel_id=UC2P5Fd5g41Gtdqf0Uzh8Qaw", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            root = ET.fromstring(r.read())
-            for entry in root.findall('{http://www.w3.org/2005/Atom}entry')[:15]:
-                t = entry.find('{http://www.w3.org/2005/Atom}title').text.strip()
-                l = entry.find('{http://www.w3.org/2005/Atom}link').attrib.get('href', '')
-                media_group = entry.find('{http://search.yahoo.com/mrss/}group')
-                thumb = media_group.find('{http://search.yahoo.com/mrss/}thumbnail')
-                img = thumb.attrib.get('url', '') if thumb is not None else ''
-                if not is_clean_headline(t): continue
-                news.append({
-                    "id": l,
-                    "title": t,
-                    "link": l,
-                    "timestamp": now,
-                    "category": detect_cat(t),
-                    "source_id": "rtv",
-                    "source_name": "আরটিভি",
-                    "source_badge": "RTV",
-                    "source_color": "#ea580c",
-                    "image": img
-                })
-    except Exception:
-        pass
+                    img = ''
+                    content = it.find('{http://search.yahoo.com/mrss/}content')
+                    if content is not None and 'url' in content.attrib:
+                        img = content.attrib['url']
+                    if not img:
+                        thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                        if thumb is not None and 'url' in thumb.attrib:
+                            img = thumb.attrib['url']
+                    if not img or 'defaultog' in img:
+                        img = cfg["fallback_img"]
+
+                    # PubDate if present
+                    pub_ts = now
+                    pub_elem = it.find('pubDate')
+                    if pub_elem is not None and pub_elem.text:
+                        try:
+                            import email.utils
+                            parsed_tuple = email.utils.parsedate_tz(pub_elem.text)
+                            if parsed_tuple:
+                                pub_ts = email.utils.mktime_tz(parsed_tuple)
+                        except Exception:
+                            pass
+
+                    cat = detect_cat(t)
+                    news.append({
+                        "id": l,
+                        "title": t,
+                        "link": l,
+                        "timestamp": pub_ts,
+                        "category": cat,
+                        "source_id": cfg["id"],
+                        "source_name": cfg["name"],
+                        "source_badge": cfg["badge"],
+                        "source_color": cfg["color"],
+                        "image": img
+                    })
+        except Exception as e:
+            pass
 
     # Fallback to local high quality cached news if live fetch count is low
     try:

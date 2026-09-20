@@ -2496,17 +2496,22 @@
     // Multi-Source Live Loader: Directly queries real-time endpoints
     async function fetchDirectRssFeeds() {
       const liveItems = [];
-      const feeds = [
+      const allFeeds = [
         { id: 'prothomalo', name: 'প্রথম আলো', badge: 'Prothom Alo', color: '#e11d48', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.prothomalo.com%2Ffeed' },
         { id: 'bbc', name: 'বিবিসি বাংলা', badge: 'BBC Bangla', color: '#dc2626', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Ffeeds.bbci.co.uk%2Fbengali%2Frss.xml' },
-        { id: 'all_bd', name: 'জাতীয় সংবাদ', badge: 'Live News', color: '#dc2626', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%3Fhl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
-        { id: 'ittefaq', name: 'দৈনিক ইত্তেফাক', badge: 'Ittefaq', color: '#2563eb', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Aittefaq.com.bd%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
         { id: 'bdpratidin', name: 'বাংলাদেশ প্রতিদিন', badge: 'BD Pratidin', color: '#16a34a', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Abd-pratidin.com%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
+        { id: 'ittefaq', name: 'দৈনিক ইত্তেফাক', badge: 'Ittefaq', color: '#2563eb', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Aittefaq.com.bd%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
         { id: 'kalerkantho', name: 'কালের কণ্ঠ', badge: 'Kaler Kantho', color: '#d97706', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Akalerkantho.com%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
-        { id: 'channel24', name: 'চ্যানেল ২৪', badge: 'Channel 24', color: '#0284c7', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Achannel24bd.tv%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
-        { id: 'ntv', name: 'এনটিভি', badge: 'NTV', color: '#16a34a', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Antvbd.com%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
-        { id: 'rtv', name: 'আরটিভি', badge: 'RTV', color: '#ea580c', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Artvonline.com%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' }
+        { id: 'jugantor', name: 'দৈনিক যুগান্তর', badge: 'Jugantor', color: '#e11d48', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Ajugantor.com%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' },
+        { id: 'bdnews24', name: 'বিডিনিউজ টোয়েন্টিফোর', badge: 'BDNews24', color: '#7c3aed', url: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3Dsite%3Abangla.bdnews24.com%26hl%3Dbn%26gl%3DBD%26ceid%3DBD%3Abn' }
       ];
+
+      // Prioritize currently active source
+      let feeds = allFeeds;
+      if (currentSource && currentSource !== 'all') {
+        const target = allFeeds.filter(f => f.id === currentSource);
+        if (target.length > 0) feeds = target;
+      }
 
       const promises = feeds.map(feed => {
         return fetch(feed.url, { cache: 'no-cache' })
@@ -2729,19 +2734,13 @@
         if (timeElem) timeElem.innerText = 'সর্বশেষ আপডেট: ' + timeString;
 
         if (forceRefresh) {
+          const srcName = SOURCE_NAMES[targetSource] || 'সকল পত্রিকা';
+          const scopeLabel = (targetSource !== 'all' ? srcName + ' - ' : '') + catLabel;
           if (addedCount > 0) {
-            if (targetCategory === 'all') {
-              showToast('✓ সকল বিভাগে ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!');
-            } else {
-              showToast('✓ ' + catLabel + ' বিভাগে ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!');
-            }
+            showToast('✓ ' + scopeLabel + '-এ ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           } else {
-            if (targetCategory === 'all') {
-              showToast('✓ সকল বিভাগের সব খবর হালনাগাদ রয়েছে');
-            } else {
-              showToast('✓ ' + catLabel + ' বিভাগের খবর হালনাগাদ রয়েছে (নতুন কোনো খবর আসেনি)');
-            }
+            showToast('✓ ' + scopeLabel + '-এর সব খবর হালনাগাদ রয়েছে');
           }
         }
       } else {
