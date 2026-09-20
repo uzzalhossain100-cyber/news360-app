@@ -1759,6 +1759,12 @@
           </svg>
           সাইট ভিজিটর ও ট্রাফিক রিপোর্ট
         </button>
+
+        <!-- Menu 3: অন্যান্য পত্রিকা থেকে নতুন খবর সংগ্রহ ও কিউরেশন বাটন -->
+        <button type="button" onclick="autoCurateNewsForNewsBanglaDesk()" style="background: linear-gradient(135deg, #e11d48, #be123c); color: white; border: none; padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; margin-left: auto; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);" title="অন্যান্য পত্রিকার সেরা খবরগুলো NewsBangla ডেস্কে আনপাবলিশড আকারে সংগ্রহ করুন">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          অন্যান্য খবর সংগ্রহ করুন
+        </button>
       </div>
 
       <!-- Live Visitor Analytics Panel (আলাদা মেনু) -->
@@ -8658,6 +8664,9 @@
       selectSource('newsbangla');
       const tabNewsBangla = document.getElementById('tabNewsBangla');
       if (tabNewsBangla) tabNewsBangla.classList.add('active');
+      if (isAdminLoggedIn()) {
+        autoCurateNewsForNewsBanglaDesk();
+      }
     }
 
     function switchPage(page) {
@@ -8748,10 +8757,98 @@
       }
     }
 
-    function selectSource(sourceId) {
+    
+    // ----------------------------------------------------
+    // Auto-Curate News from Other Newspapers for NewsBangla Admin Desk:
+    // "এডমিন যখন NewsBangla পেজে যাবে তখন ক্যাটাগরি ভিত্তিক অন্যান্য খবর থেকে মূল কিছু খবর সংগ্রহ করে
+    // এখানে জমা হবে পরে এডমিন চাইলে এগুলো এডিট করে নতুন ভাবে খবর পাবলিশ করতে পারবে।"
+    // ----------------------------------------------------
+    function autoCurateNewsForNewsBanglaDesk() {
+      if (!isAdminLoggedIn()) return;
+
+      const customArticles = getAdminCustomArticles();
+      const existingTitles = new Set(customArticles.map(a => (a.title || '').trim()));
+      const otherNewspaperArticles = allNewsItems.filter(it => it.source_id !== 'newsbangla');
+
+      if (otherNewspaperArticles.length === 0) return;
+
+      const categories = ['national', 'international', 'sports', 'tech', 'entertainment', 'economy'];
+      let addedCount = 0;
+
+      categories.forEach(function(cat) {
+        // Collect top articles from other newspapers in this category
+        const catArticles = otherNewspaperArticles.filter(it => it.category === cat && !isNonNewsHeadline(it.title));
+        
+        // Take 3 top distinct stories per category to curate
+        let perCatCount = 0;
+        catArticles.forEach(function(orig) {
+          if (perCatCount >= 3) return;
+
+          const cleanTitle = (orig.title || '').replace(/\s*[-–|].*$/, '').trim();
+          if (!cleanTitle || cleanTitle.length < 15) return;
+          if (existingTitles.has(cleanTitle)) return;
+
+          // Check if already in customArticles by ID or title
+          existingTitles.add(cleanTitle);
+
+          const origSource = orig.source_name || 'শীর্ষ গণমাধ্যম';
+          const origParas = Array.isArray(orig.paragraphs) && orig.paragraphs.length > 0 
+            ? orig.paragraphs 
+            : [cleanTitle + ' সংক্রান্ত বিষয়ে সংশ্লিষ্ট মহলে ব্যাপক আলোচনা শুরু হয়েছে।'];
+
+          // Editorial synthesis under NewsBangla
+          const curatedParas = [
+            'নিউজবাংলা বিশেষ ডেস্ক: ' + cleanTitle + ' সংক্রান্ত বিষয়ে মাঠপর্যায়ের সর্বশেষ তথ্য-উপাত্তে তাৎপর্যপূর্ণ অগ্রগতি লক্ষ্য করা গেছে। বিভিন্ন দায়িত্বশীল সূত্রের বরাত দিয়ে ' + origSource + '-এর অনুসন্ধানী প্রতিবেদনে ঘটনাটির বিশদ চিত্র উঠে এসেছে।',
+            ...origParas.slice(0, 6).filter(p => typeof p === 'string' && p.trim().length > 25),
+            'নিউজবাংলা পর্যবেক্ষণ দল জানাচ্ছে, বর্তমান বাস্তবতায় ঘটনাটির প্রভাব অত্যন্ত সুদূরপ্রসারী। নাগরিক জীবন ও সংশ্লিষ্ট ক্ষেত্রে এর দীর্ঘমেয়াদী ফলাফল নিয়ে বহুমুখী বিশ্লেষণ চলছে।',
+            'পরিস্থিতির ওপর সার্বক্ষণিক সজাগ দৃষ্টি রাখছে নিউজবাংলা। ঘটনার বিস্তারিত অগ্রগতি ও পরবর্তী আপডেট জানতে চোখ রাখুন নিউজবাংলা ডিজিটাল নেটওয়ার্কে।'
+          ];
+
+          const newId = 'custom_curated_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+          const effectiveTime = orig.timestamp || Math.floor(Date.now() / 1000);
+
+          const curatedItem = {
+            id: newId,
+            title: cleanTitle,
+            link: 'https://newsbangla.vercel.app/article/' + newId,
+            timestamp: effectiveTime,
+            category: cat,
+            source_id: 'newsbangla',
+            source_name: 'NewsBangla',
+            source_badge: 'NewsBangla',
+            source_color: '#e11d48',
+            image: orig.image || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
+            time_ago: 'আনপাবলিশড (ড্রাফট)',
+            published: false,       // Stored as UNPUBLISHED for Admin approval/edit!
+            published_at: null,     // Will count from when Admin publishes
+            hidden: false,
+            is_custom: true,
+            paragraphs: curatedParas
+          };
+
+          customArticles.push(curatedItem);
+          perCatCount++;
+          addedCount++;
+        });
+      });
+
+      if (addedCount > 0) {
+        saveAdminCustomArticles(customArticles);
+        integrateCustomArticles();
+        if (activePage === 'admin') {
+          renderAdminNewsList();
+        }
+        showToast('✓ অন্যান্য পত্রিকা থেকে ক্যাটাগরি অনুযায়ী ' + bnDigits(addedCount) + 'টি নতুন খবর NewsBangla ডেস্কে জমা হয়েছে!');
+      }
+    }
+
+function selectSource(sourceId) {
       // NewsBangla Requirement:
       // "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
       currentSource = sourceId;
+      if (sourceId === 'newsbangla' && isAdminLoggedIn()) {
+        autoCurateNewsForNewsBanglaDesk();
+      }
       document.querySelectorAll('.bottom-source-btn').forEach(function(btn) {
         if (btn.getAttribute('data-source') === sourceId) {
           btn.classList.add('active');
