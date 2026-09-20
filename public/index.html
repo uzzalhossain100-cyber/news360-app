@@ -1580,14 +1580,14 @@
       <div style="display: flex; align-items: center; gap: 8px;">
         <span style="font-size: 13px; font-weight: 800; color: #e11d48; display: inline-flex; align-items: center; gap: 5px;">
           <span style="width: 7px; height: 7px; border-radius: 50%; background: #e11d48;"></span>
-          NewsBangla এডমিন ফিল্টার:
+          NewsBangla এডমিন কন্ট্রোল:
         </span>
+        <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">(পাবলিশড খবরসমূহ আনপাবলিশ, এডিট বা ডিলিট করতে পারবেন)</span>
       </div>
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-        <button type="button" class="nb-status-filter-btn active" data-status="all" onclick="setNewsBanglaAdminStatusFilter('all')" style="border: 1px solid var(--border-color, #cbd5e1); background: #e11d48; color: white; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">সব খবর (<span id="nbCountAll">০</span>)</button>
-        <button type="button" class="nb-status-filter-btn" data-status="published" onclick="setNewsBanglaAdminStatusFilter('published')" style="border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: #16a34a; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">✓ পাবলিশড (<span id="nbCountPub">০</span>)</button>
-        <button type="button" class="nb-status-filter-btn" data-status="unpublished" onclick="setNewsBanglaAdminStatusFilter('unpublished')" style="border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: #dc2626; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">✕ আনপাবলিশড (<span id="nbCountUnpub">০</span>)</button>
-        <button type="button" onclick="autoCurateNewsForNewsBanglaDesk()" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 20px; padding: 5px 13px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="অন্যান্য পত্রিকা থেকে আরও খবর সংগ্রহ করুন">🔄 আরও খবর আনুন</button>
+        <button type="button" class="nb-status-filter-btn active" data-status="published" onclick="setNewsBanglaAdminStatusFilter('published')" style="border: 1px solid #16a34a; background: #16a34a; color: white; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">✓ পাবলিশড খবর (<span id="nbCountPub">০</span>)</button>
+        <button type="button" class="nb-status-filter-btn" data-status="unpublished" onclick="setNewsBanglaAdminStatusFilter('unpublished')" style="border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: #dc2626; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">✕ ড্রাফট/আনপাবলিশড (<span id="nbCountUnpub">০</span>)</button>
+        <button type="button" class="nb-status-filter-btn" data-status="all" onclick="setNewsBanglaAdminStatusFilter('all')" style="border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: var(--text-main); border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">সব (<span id="nbCountAll">০</span>)</button>
       </div>
     </div>
 
@@ -8904,7 +8904,7 @@ function calculateTimeAgo(timestamp) {
 
 
     // NewsBangla Admin Status Filter State ('all' | 'published' | 'unpublished')
-    let currentNewsBanglaAdminStatusFilter = 'all';
+    let currentNewsBanglaAdminStatusFilter = 'published';
 
     function setNewsBanglaAdminStatusFilter(status) {
       currentNewsBanglaAdminStatusFilter = status;
@@ -9594,7 +9594,9 @@ function selectSource(sourceId) {
           delBtn.onclick = function(e) {
             e.preventDefault();
             e.stopPropagation();
-            deleteCustomArticle(item.id);
+            if (confirm('আপনি কি নিশ্চিত যে এই সংবাদটি সম্পূর্ণ মুছে ফেলতে চান?')) {
+              deleteCustomArticle(item.id);
+            }
           };
 
           rightDiv.appendChild(pubBtn);
