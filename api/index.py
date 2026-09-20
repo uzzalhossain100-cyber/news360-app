@@ -1155,14 +1155,26 @@ def serve_article_image(article_id: str):
 
 
 @app.get("/api/article")
-def get_article(url: str = Query(...)):
+def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
     paras = []
     title = ""
     image = ""
+    real_url = url
+
+    # Decode Google News redirect if needed
+    if 'news.google.com' in real_url:
+        try:
+            from googlenewsdecoder import new_decoderv1
+            res = new_decoderv1(real_url)
+            if res.get('status') and res.get('decoded_url'):
+                real_url = res['decoded_url']
+        except Exception:
+            pass
+
     try:
-        headers = headers_browser if ('prothomalo' in url or 'bbc' in url) else headers_social
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=6) as r:
+        headers = headers_browser if ('prothomalo' in real_url or 'bbc' in real_url) else headers_social
+        req = urllib.request.Request(real_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as r:
             html_content = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html_content, 'html.parser')
             
@@ -1185,7 +1197,7 @@ def get_article(url: str = Query(...)):
             if not image:
                 for img in soup.find_all('img'):
                     src = img.get('src') or img.get('data-src') or ''
-                    if src.startswith('http') and not any(k in src for k in ['logo', 'icon', 'advert', 'ad.', 'banner', 'share', 'avatar']):
+                    if src.startswith('http') and not any(k in src.lower() for k in ['logo', 'icon', 'advert', 'ad.', 'banner', 'share', 'avatar']):
                         image = src
                         break
 
@@ -1195,11 +1207,15 @@ def get_article(url: str = Query(...)):
 
             # Robust paragraph extraction across all Bangladeshi newspaper structures
             seen_paras = set()
-            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব']
+            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন']
             
-            for p in soup.find_all('p'):
+            # 1. Target article body containers first if available
+            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body)', re.I))
+            search_scope = article_body if article_body else soup
+
+            for p in search_scope.find_all('p'):
                 txt = p.get_text(strip=True)
-                if len(txt) > 28 and not is_video_or_bulletin(txt):
+                if len(txt) > 22 and not is_video_or_bulletin(txt):
                     if re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
                         continue
                     if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
@@ -1209,9 +1225,9 @@ def get_article(url: str = Query(...)):
         pass
 
     return {
-        "title": title,
+        "title": title or title_hint or "",
         "image": image,
-        "paragraphs": paras[:25]
+        "paragraphs": paras[:30]
     }
 
 
