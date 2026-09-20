@@ -9198,6 +9198,10 @@ function selectSource(sourceId) {
     }
 
     async function loadNews(forceRefresh = false) {
+      const targetCategory = currentCategory || 'all';
+      const targetSource = currentSource || 'all';
+      const catLabel = CATEGORY_NAMES[targetCategory] || 'সকল বিভাগ';
+
       const refreshBtn = document.getElementById('refreshBtn');
       if (refreshBtn) {
         refreshBtn.classList.add('refreshing');
