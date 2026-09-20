@@ -8655,11 +8655,6 @@
     }
 
     function openNewsBanglaDesk() {
-      if (!isAdminLoggedIn()) {
-        alert('NewsBangla পেজ শুধুমাত্র এডমিন লগিন করে দেখতে পাবেন।');
-        switchPage('login');
-        return;
-      }
       selectSource('newsbangla');
       const tabNewsBangla = document.getElementById('tabNewsBangla');
       if (tabNewsBangla) tabNewsBangla.classList.add('active');
@@ -8755,15 +8750,7 @@
 
     function selectSource(sourceId) {
       // NewsBangla Requirement:
-      // "NewsBangla পেজ শুধুমাত্র এডমিন লগিন করে দেখতে পাবেন... অন্যথায় শুধু এডমিন সেই খবর দেখতে পাবেন।"
-      if (sourceId === 'newsbangla') {
-        if (!isAdminLoggedIn()) {
-          alert('NewsBangla পেজ ও এর বিশেষ সম্পাদকীয় সংবাদ শুধুমাত্র এডমিন লগিন করে দেখতে পাবেন। অনুগ্রহ করে এডমিন আইডি ও পাসওয়ার্ড দিয়ে লগিন করুন।');
-          switchPage('login');
-          return;
-        }
-      }
-
+      // "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
       currentSource = sourceId;
       document.querySelectorAll('.bottom-source-btn').forEach(function(btn) {
         if (btn.getAttribute('data-source') === sourceId) {
@@ -8772,6 +8759,17 @@
           btn.classList.remove('active');
         }
       });
+
+      // Update top tabNewsBangla active indicator if present
+      const tabNewsBangla = document.getElementById('tabNewsBangla');
+      if (tabNewsBangla) {
+        if (sourceId === 'newsbangla') {
+          tabNewsBangla.classList.add('active');
+        } else {
+          tabNewsBangla.classList.remove('active');
+        }
+      }
+
       if (activePage !== 'news') {
         switchPage('news');
       }
@@ -9217,38 +9215,6 @@
       const isAdmin = isAdminLoggedIn();
 
       // Dynamic on-the-fly NewsBangla curation for frontend
-      if (currentSource === 'newsbangla') {
-        const existingNB = allNewsItems.filter(it => it.source_id === 'newsbangla');
-        if (existingNB.length < 15) {
-          const otherItems = allNewsItems.filter(it => it.source_id !== 'newsbangla');
-          otherItems.forEach(it => {
-            const cleanT = (it.title || '').replace(/\s*[-–|].*$/, '').trim();
-            const curatedId = 'nb-' + (it.link || it.id || Math.random());
-            if (!allNewsItems.some(x => x.id === curatedId)) {
-              allNewsItems.push({
-                id: curatedId,
-                title: cleanT,
-                link: it.link,
-                timestamp: it.timestamp,
-                category: it.category,
-                source_id: 'newsbangla',
-                source_name: 'নিউজবাংলা',
-                source_badge: 'NewsBangla',
-                source_color: '#e11d48',
-                image: it.image,
-                paragraphs: [
-                  'নিউজবাংলা বিশেষ ডেস্ক: ' + cleanT + ' সংক্রান্ত বিষয়ে মাঠপর্যায়ের সর্বশেষ অনুসন্ধান ও তথ্যানুসন্ধানে তাৎপর্যপূর্ণ অগ্রগতি লক্ষ্য করা গেছে। বিভিন্ন দায়িত্বশীল সূত্রের বরাত দিয়ে ' + (it.source_name || 'শীর্ষ গণমাধ্যম') + '-এর অনুসন্ধানী প্রতিবেদনে ঘটনাটির বিশদ চিত্র উঠে এসেছে।',
-                  ...(Array.isArray(it.paragraphs) && it.paragraphs.length > 0 ? it.paragraphs : ['ঘটনাটি নিয়ে সংশ্লিষ্ট মহলে ব্যাপক আলোচনা ও প্রতিক্রিয়া সৃষ্টি হয়েছে। ঘটনার গভীরতা বিবেচনায় নিয়ে দায়িত্বশীল কর্তৃপক্ষ তৎপর রয়েছে বলে জানা গেছে।']),
-                  'নিউজবাংলা পর্যবেক্ষণ দল জানাচ্ছে, বর্তমান বাস্তবতায় ঘটনাটির প্রভাব অত্যন্ত সুদূরপ্রসারী। নাগরিক জীবন ও সংশ্লিষ্ট ক্ষেত্রে এর দীর্ঘমেয়াদী ফলাফল নিয়ে বহুমুখী বিশ্লেষণ চলছে।',
-                  'পরিস্থিতির ওপর সার্বক্ষণিক সজাগ দৃষ্টি রাখছে নিউজবাংলা। ঘটনার বিস্তারিত অগ্রগতি ও পরবর্তী আপডেট জানতে চোখ রাখুন নিউজবাংলা ডিজিটাল নেটওয়ার্কে।'
-                ]
-              });
-            }
-          });
-        }
-      }
-
-
       const grid = document.getElementById('newsGrid');
       const empty = document.getElementById('emptyState');
       grid.innerHTML = '';
@@ -9259,6 +9225,8 @@
 
       let items = allNewsItems.filter(function(item) {
         if (isNonNewsHeadline(item.title)) return false;
+        // Never filter out custom / NewsBangla articles by 24h cutoff
+        if (item.is_custom || item.source_id === 'newsbangla') return true;
         if (!item.timestamp) return true;
         return item.timestamp >= cutoff24h;
       });
@@ -9309,6 +9277,19 @@
 
       if (items.length === 0) {
         empty.style.display = 'block';
+        const emptyH3 = empty.querySelector('h3');
+        const emptyP = empty.querySelector('p');
+        if (currentSource === 'newsbangla') {
+          if (emptyH3) emptyH3.innerText = 'NewsBangla-এ এখনো কোনো সংবাদ পাবলিশ করা হয়নি';
+          if (emptyP) {
+            emptyP.innerHTML = isAdmin 
+              ? 'এডমিন হিসেবে আপনি আনপাবলিশড সংবাদগুলো দেখতে ও পাবলিশ করতে <button onclick="switchPage(\'admin\')" style="background:#e11d48; color:white; border:none; padding:4px 10px; border-radius:6px; font-weight:700; cursor:pointer;">এডমিন প্যানেলে যান</button>'
+              : 'এডমিন কর্তৃক নতুন খবর পাবলিশ হওয়া মাত্রই এখানে প্রদর্শিত হবে। অনুগ্রহ করে কিছুক্ষণ পর আবার দেখুন।';
+          }
+        } else {
+          if (emptyH3) emptyH3.innerText = 'কোনো খবর পাওয়া যায়নি';
+          if (emptyP) emptyP.innerText = 'অনুগ্রহ করে অন্য কোনো শব্দ দিয়ে সার্চ করুন অথবা বিভাগ পরিবর্তন করুন।';
+        }
         return;
       }
       empty.style.display = 'none';

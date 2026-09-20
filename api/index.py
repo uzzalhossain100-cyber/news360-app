@@ -649,24 +649,25 @@ def get_news(
     now_ts = time.time()
     
     # 1. SPECIAL CASE: NewsBangla Exclusive Source
-    # ("এখানে পত্রিকা ক্যাটাগরিতে আর একটি নাম যোগ হবে NewsBangla এখানে ক্লিক করলে ক্যাটাগরি অনুযায়ী প্রতিটি বিভাগে অন্য পত্রিকার খবর থেকে নিজের মতো করে কিছু মূল খবর তৈরী করে প্রদর্শন করবে সাথে খবরের ছবিটিও নিজের মতো খবর রিলেটেড নতুন ছবি দিবে")
+    # Requirement: "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
     if source == 'newsbangla':
-        catalog = load_pristine_catalog()
-        curated_pool = []
-        seen_t = set()
-        for it in catalog:
-            c_it = curate_into_newsbangla(it)
-            if c_it['title'] not in seen_t:
-                seen_t.add(c_it['title'])
-                curated_pool.append(c_it)
+        admin_articles = read_persisted_admin_articles()
+        # Filter strictly for articles published by admin
+        published_items = [
+            a for a in admin_articles 
+            if a.get('source_id') == 'newsbangla' and (a.get('published') is True or (a.get('published_at') and a.get('published_at') > 0)) and not a.get('hidden')
+        ]
+        
+        # Sort by published_at / timestamp descending
+        published_items.sort(key=lambda x: (x.get('published_at') or x.get('timestamp') or 0), reverse=True)
 
         if category and category != 'all':
-            curated_pool = [n for n in curated_pool if n.get('category') == category]
+            published_items = [n for n in published_items if n.get('category') == category]
 
         return {
             "status": "success",
-            "count": len(curated_pool[:limit]),
-            "news": curated_pool[:limit]
+            "count": len(published_items[:limit]),
+            "news": published_items[:limit]
         }
 
     # 2. STANDARD NEWSPAPER SOURCES
