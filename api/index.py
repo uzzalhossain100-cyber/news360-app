@@ -214,15 +214,13 @@ def fetch_ittefaq_live(now_ts):
                     if full_url in seen_links: continue
                     seen_links.add(full_url)
                     candidates.append((t, full_url))
-                    if len(candidates) >= 20: break
+                    if len(candidates) >= 15: break
 
-            # Concurrently extract OG image for top Ittefaq articles so every card has a real photo!
-            def resolve_ittefaq_og(cand):
-                title, url = cand
+            for t, u in candidates:
                 img = ''
                 try:
-                    rq = urllib.request.Request(url, headers=headers_social)
-                    with urllib.request.urlopen(rq, timeout=2.5) as resp:
+                    rq = urllib.request.Request(u, headers=headers_social)
+                    with urllib.request.urlopen(rq, timeout=1.8) as resp:
                         s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
                         og = s.find('meta', property='og:image')
                         if og and og.get('content') and og['content'].startswith('http'):
@@ -231,21 +229,19 @@ def fetch_ittefaq_live(now_ts):
                     pass
                 if not img:
                     img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
-                return {
-                    "id": url,
-                    "title": title,
-                    "link": url,
+
+                items.append({
+                    "id": u,
+                    "title": t,
+                    "link": u,
                     "timestamp": now_ts,
-                    "category": detect_cat(title, url),
+                    "category": detect_cat(t, u),
                     "source_id": "ittefaq",
                     "source_name": "দৈনিক ইত্তেফাক",
                     "source_badge": "Ittefaq",
                     "source_color": "#2563eb",
                     "image": img
-                }
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-                items = list(ex.map(resolve_ittefaq_og, candidates))
+                })
     except Exception:
         pass
     return items
