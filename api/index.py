@@ -115,15 +115,74 @@ def detect_cat(title, url=""):
 headers_social = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
+
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone, timedelta
+
+BD_TZ = timezone(timedelta(hours=6))
+
+def get_current_bd_date():
+    return datetime.now(BD_TZ).date()
+
+def parse_iso_or_rfc_date(val_str):
+    if not val_str: return None
+    s = val_str.strip()
+    try:
+        dt = parsedate_to_datetime(s)
+        return dt.astimezone(BD_TZ)
+    except Exception:
+        pass
+    try:
+        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        return dt.astimezone(BD_TZ)
+    except Exception:
+        pass
+    return None
+
+def extract_datetime_from_page(soup, url=""):
+    if not soup: return None
+    meta_props = [
+        'article:published_time', 'og:article:published_time', 'publication_date',
+        'datePublished', 'publish_date', 'parsely-pub-date', 'pubdate',
+        'article:modified_time', 'og:updated_time'
+    ]
+    for prop in meta_props:
+        tag = soup.find('meta', property=prop) or soup.find('meta', attrs={'name': prop})
+        if tag and tag.get('content'):
+            dt = parse_iso_or_rfc_date(tag['content'])
+            if dt: return dt
+
+    # Check Schema JSON-LD
+    for script in soup.find_all('script', type='application/ld+json'):
+        if script.string and ('datePublished' in script.string or 'dateCreated' in script.string):
+            m = re.search(r'"datePublished"\s*:\s*"([^"]+)"', script.string)
+            if m:
+                dt = parse_iso_or_rfc_date(m.group(1))
+                if dt: return dt
+
+    # Check date in URL (e.g. /2026/09/20/ or /2026-09-20/)
+    if url:
+        m_url = re.search(r'/(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])/', url)
+        if m_url:
+            try:
+                y, m, d = int(m_url.group(1)), int(m_url.group(2)), int(m_url.group(3))
+                return datetime(y, m, d, 12, 0, 0, tzinfo=BD_TZ)
+            except Exception:
+                pass
+    return None
+
 def extract_full_article(url):
     image = ""
     paras = []
+    pub_dt = None
     headers = headers_browser if ('prothomalo' in url or 'bbc' in url) else headers_social
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=3.0) as r:
             html = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html, 'html.parser')
+
+            pub_dt = extract_datetime_from_page(soup, url)
 
             # Extract authentic high-res news image
             og_img = soup.find('meta', property='og:image')
@@ -163,37 +222,61 @@ def extract_full_article(url):
                                         paras.append(txt)
     except Exception:
         pass
-    return image, paras[:15]
+    return image, paras[:15], pub_dt
+
+
+# User Requirement:
+# "প্রতিটি খবরের মূল সাইটে প্রকাশ তারিখ ও সময় থাকে সেই তারিখ ও সময় অনুয়ায়ী এখানে নিয়ে আসা প্রয়োজন।
+#  প্রকাশ তারিখ যদি কারেন্ট তারিখের সাথে ম্যাচ করে তবে সেই খবর আসবে আর সেই খবরের প্রকাশ সময় থেকে এখানে কাউন্ট হবে।"
+
+def is_matching_current_date(dt_obj):
+    if not dt_obj:
+        return True # If publication date cannot be parsed, allow by default
+    current_date = get_current_bd_date()
+    return dt_obj.date() == current_date
 
 def fetch_prothomalo_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3.5) as r:
             root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:15]:
+            for it in root.findall('.//item')[:25]:
                 t_elem = it.find('title')
                 l_elem = it.find('link')
+                pd_elem = it.find('pubDate')
                 if t_elem is None or not t_elem.text: continue
                 t = t_elem.text.strip()
                 l = l_elem.text.strip() if (l_elem is not None and l_elem.text) else ''
                 if not is_clean_headline(t, l) or l in seen: continue
+                
+                # Check pubDate from feed
+                dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
+                if dt_obj and dt_obj.date() != current_date:
+                    continue # Exclude if not matching current date
+                
                 seen.add(l)
-                candidates.append((t, l))
+                candidates.append((t, l, dt_obj))
     except Exception:
         pass
 
     def build_item(c):
-        t, l = c
-        img, paras = extract_full_article(l)
+        t, l, dt_obj = c
+        img, paras, page_dt = extract_full_article(l)
+        effective_dt = dt_obj or page_dt
+        if effective_dt and effective_dt.date() != current_date:
+            return None # Must match current date
+
+        article_ts = int(effective_dt.timestamp()) if effective_dt else int(now_ts)
         if not img:
             img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
         return {
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "prothomalo",
             "source_name": "প্রথম আলো",
@@ -204,32 +287,45 @@ def fetch_prothomalo_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 def fetch_bbc_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://feeds.bbci.co.uk/bengali/rss.xml", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3.5) as r:
             root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:15]:
+            for it in root.findall('.//item')[:25]:
                 t_elem = it.find('title')
                 l_elem = it.find('link')
+                pd_elem = it.find('pubDate')
                 if t_elem is None or not t_elem.text: continue
                 t = t_elem.text.strip()
                 l = l_elem.text.strip() if (l_elem is not None and l_elem.text) else ''
                 if not is_clean_headline(t, l) or l in seen: continue
+
+                dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
+                if dt_obj and dt_obj.date() != current_date:
+                    continue
+
                 seen.add(l)
                 thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
                 rss_img = thumb.attrib['url'] if (thumb is not None and 'url' in thumb.attrib) else ''
-                candidates.append((t, l, rss_img))
+                candidates.append((t, l, rss_img, dt_obj))
     except Exception:
         pass
 
     def build_item(c):
-        t, l, rss_img = c
-        img, paras = extract_full_article(l)
+        t, l, rss_img, dt_obj = c
+        img, paras, page_dt = extract_full_article(l)
+        effective_dt = dt_obj or page_dt
+        if effective_dt and effective_dt.date() != current_date:
+            return None
+
+        article_ts = int(effective_dt.timestamp()) if effective_dt else int(now_ts)
         if not img: img = rss_img
         if not img:
             img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
@@ -237,7 +333,7 @@ def fetch_bbc_live(now_ts):
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "bbc",
             "source_name": "বিবিসি বাংলা",
@@ -248,11 +344,13 @@ def fetch_bbc_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 def fetch_ittefaq_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://www.ittefaq.com.bd/", headers=headers_social)
         with urllib.request.urlopen(req, timeout=3.5) as r:
@@ -270,20 +368,24 @@ def fetch_ittefaq_live(now_ts):
                     if not is_clean_headline(t, h) or h in seen: continue
                     seen.add(h)
                     candidates.append((t, h))
-                    if len(candidates) >= 15: break
+                    if len(candidates) >= 20: break
     except Exception:
         pass
 
     def build_item(c):
         t, l = c
-        img, paras = extract_full_article(l)
+        img, paras, page_dt = extract_full_article(l)
+        if page_dt and page_dt.date() != current_date:
+            return None
+
+        article_ts = int(page_dt.timestamp()) if page_dt else int(now_ts)
         if not img:
             img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
         return {
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "ittefaq",
             "source_name": "দৈনিক ইত্তেফাক",
@@ -294,11 +396,13 @@ def fetch_ittefaq_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 def fetch_bdpratidin_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://www.bd-pratidin.com/", headers=headers_social)
         with urllib.request.urlopen(req, timeout=3.5) as r:
@@ -312,20 +416,24 @@ def fetch_bdpratidin_live(now_ts):
                 if full_url in seen: continue
                 seen.add(full_url)
                 candidates.append((t, full_url))
-                if len(candidates) >= 15: break
+                if len(candidates) >= 20: break
     except Exception:
         pass
 
     def build_item(c):
         t, l = c
-        img, paras = extract_full_article(l)
+        img, paras, page_dt = extract_full_article(l)
+        if page_dt and page_dt.date() != current_date:
+            return None
+
+        article_ts = int(page_dt.timestamp()) if page_dt else int(now_ts)
         if not img:
             img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
         return {
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "bdpratidin",
             "source_name": "বাংলাদেশ প্রতিদিন",
@@ -336,11 +444,13 @@ def fetch_bdpratidin_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 def fetch_kalerkantho_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://www.kalerkantho.com/", headers=headers_social)
         with urllib.request.urlopen(req, timeout=3.5) as r:
@@ -355,20 +465,24 @@ def fetch_kalerkantho_live(now_ts):
                 if full_url in seen: continue
                 seen.add(full_url)
                 candidates.append((t, full_url))
-                if len(candidates) >= 15: break
+                if len(candidates) >= 20: break
     except Exception:
         pass
 
     def build_item(c):
         t, l = c
-        img, paras = extract_full_article(l)
+        img, paras, page_dt = extract_full_article(l)
+        if page_dt and page_dt.date() != current_date:
+            return None
+
+        article_ts = int(page_dt.timestamp()) if page_dt else int(now_ts)
         if not img:
             img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
         return {
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "kalerkantho",
             "source_name": "কালের কণ্ঠ",
@@ -379,11 +493,13 @@ def fetch_kalerkantho_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 def fetch_jugantor_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://www.jugantor.com/", headers=headers_social)
         with urllib.request.urlopen(req, timeout=3.5) as r:
@@ -402,20 +518,24 @@ def fetch_jugantor_live(now_ts):
                     if full_url in seen: continue
                     seen.add(full_url)
                     candidates.append((t, full_url))
-                    if len(candidates) >= 15: break
+                    if len(candidates) >= 20: break
     except Exception:
         pass
 
     def build_item(c):
         t, l = c
-        img, paras = extract_full_article(l)
+        img, paras, page_dt = extract_full_article(l)
+        if page_dt and page_dt.date() != current_date:
+            return None
+
+        article_ts = int(page_dt.timestamp()) if page_dt else int(now_ts)
         if not img:
             img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
         return {
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "jugantor",
             "source_name": "দৈনিক যুগান্তর",
@@ -426,11 +546,13 @@ def fetch_jugantor_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 def fetch_bdnews24_live(now_ts):
     candidates = []
     seen = set()
+    current_date = get_current_bd_date()
     try:
         req = urllib.request.Request("https://bangla.bdnews24.com/", headers=headers_social)
         with urllib.request.urlopen(req, timeout=3.5) as r:
@@ -445,20 +567,24 @@ def fetch_bdnews24_live(now_ts):
                     if full_url in seen: continue
                     seen.add(full_url)
                     candidates.append((t, full_url))
-                    if len(candidates) >= 15: break
+                    if len(candidates) >= 20: break
     except Exception:
         pass
 
     def build_item(c):
         t, l = c
-        img, paras = extract_full_article(l)
+        img, paras, page_dt = extract_full_article(l)
+        if page_dt and page_dt.date() != current_date:
+            return None
+
+        article_ts = int(page_dt.timestamp()) if page_dt else int(now_ts)
         if not img:
             img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
         return {
             "id": l,
             "title": t,
             "link": l,
-            "timestamp": now_ts,
+            "timestamp": article_ts,
             "category": detect_cat(t, l),
             "source_id": "bdnews24",
             "source_name": "বিডিনিউজ টোয়েন্টিফোর",
@@ -469,7 +595,8 @@ def fetch_bdnews24_live(now_ts):
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        return list(ex.map(build_item, candidates))
+        res = list(ex.map(build_item, candidates))
+        return [it for it in res if it is not None]
 
 
 CATEGORY_KEYWORDS = {
@@ -503,6 +630,7 @@ def fetch_targeted_category_news(target_category, target_source=None, limit=50):
         papers = [(k, *v) for k, v in PAPER_DOMAINS.items()]
 
     now_ts = time.time()
+    current_date = get_current_bd_date()
     for pid, domain, pname, pbadge, pcolor in papers:
         query = f"site:{domain} ({kw})"
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=bn&gl=BD&ceid=BD:bn"
@@ -510,18 +638,23 @@ def fetch_targeted_category_news(target_category, target_source=None, limit=50):
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
             with urllib.request.urlopen(req, timeout=3.5) as r:
                 root = ET.fromstring(r.read())
-                for it in root.findall('.//item')[:15]:
+                for it in root.findall('.//item')[:20]:
                     title_elem = it.find('title')
                     link_elem = it.find('link')
+                    pd_elem = it.find('pubDate')
                     if title_elem is None or not title_elem.text: continue
                     t = title_elem.text.strip()
-                    # Clean title: Google news titles usually end with " - Newspaper"
                     t = re.sub(r'\s*-\s*[^ -]+$', '', t).strip()
                     l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
                     if not is_clean_headline(t, l): continue
 
+                    dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
+                    if dt_obj and dt_obj.date() != current_date:
+                        continue # Exclude non-current dates
+
+                    article_ts = int(dt_obj.timestamp()) if dt_obj else int(now_ts)
+
                     # Bind authentic themed news photo for category
-                    img = ''
                     CATEGORY_THEMED_IMAGES = {
                         'sports': 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80',
                         'entertainment': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
@@ -536,7 +669,7 @@ def fetch_targeted_category_news(target_category, target_source=None, limit=50):
                         "id": l,
                         "title": t,
                         "link": l,
-                        "timestamp": now_ts,
+                        "timestamp": article_ts,
                         "category": target_category,
                         "source_id": pid,
                         "source_name": pname,
@@ -580,7 +713,6 @@ def load_pristine_catalog():
     except Exception:
         pass
     return []
-
 
 def curate_into_newsbangla(item):
     orig_title = item.get('title', '').strip()
@@ -725,6 +857,10 @@ def get_news(
                         seen_links.add(it.get('link'))
                         cat_items.append(it)
         clean_news = cat_items
+
+    
+    # Sort all news items by exact publication timestamp descending
+    news.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
 
     return {
         "status": "success",
