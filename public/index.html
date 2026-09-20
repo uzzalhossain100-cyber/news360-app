@@ -9350,13 +9350,12 @@
     function getArticleDirectShareUrl(item) {
       if (!item) return window.location.href;
       const baseUrl = 'https://newsbangla.vercel.app';
-      // If it has an ID, use ?article=<id>
+      // Use /article/<id> so social media crawlers (Facebook, WhatsApp, Messenger) fetch dynamic OpenGraph tags
       if (item.id) {
-        return baseUrl + '/?article=' + encodeURIComponent(item.id);
+        return baseUrl + '/article/' + encodeURIComponent(item.id);
       }
-      // Or use original link encoded as ?link=
       if (item.link) {
-        return baseUrl + '/?link=' + encodeURIComponent(item.link);
+        return baseUrl + '/article/' + encodeURIComponent(item.link);
       }
       return baseUrl;
     }
@@ -9468,12 +9467,24 @@
 
         function tryFindAndOpen() {
           let found = null;
-          if (articleId) {
-            found = allNewsItems.find(it => it.id === articleId || it.id === decodeURIComponent(articleId));
+          const targetId = articleId ? decodeURIComponent(articleId).trim() : '';
+          const targetLink = articleLink ? decodeURIComponent(articleLink).trim() : '';
+
+          // 1. Search in local / admin custom articles
+          const customArticles = getCustomArticles();
+          if (targetId) {
+            found = customArticles.find(it => it.id === targetId);
           }
-          if (!found && articleLink) {
-            const decLink = decodeURIComponent(articleLink);
-            found = allNewsItems.find(it => it.link === decLink || it.id === decLink);
+          if (!found && targetLink) {
+            found = customArticles.find(it => it.link === targetLink || it.id === targetLink);
+          }
+
+          // 2. Search in all loaded news items
+          if (!found && targetId) {
+            found = allNewsItems.find(it => it.id === targetId || it.id === ('newsbangla-' + targetId));
+          }
+          if (!found && targetLink) {
+            found = allNewsItems.find(it => it.link === targetLink || it.id === targetLink);
           }
 
           if (found) {

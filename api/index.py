@@ -703,6 +703,154 @@ def get_news(
     }
 
 
+
+# ---------------------------------------------------------------------------
+# SOCIAL MEDIA SHARE PREVIEW ENDPOINT (Facebook, WhatsApp, Messenger, Twitter)
+# Generates dynamic OpenGraph tags with the real article headline and thumbnail image
+# ---------------------------------------------------------------------------
+def render_social_share_page(article_id: str, direct_link: Optional[str] = None):
+    found_item = None
+    target_id = article_id.strip() if article_id else ""
+    target_link = direct_link.strip() if direct_link else ""
+
+    # 1. Search in Admin Persisted Articles
+    try:
+        admin_articles = read_persisted_admin_articles()
+        for a in admin_articles:
+            if target_id and a.get("id") == target_id:
+                found_item = a
+                break
+            if target_link and a.get("link") == target_link:
+                found_item = a
+                break
+    except Exception:
+        pass
+
+    # 2. Search in Pristine Catalog
+    if not found_item:
+        try:
+            catalog = load_pristine_catalog()
+            for it in catalog:
+                if target_id and (it.get("id") == target_id or f"newsbangla-{it.get('id')}" == target_id):
+                    found_item = it
+                    break
+                if target_link and it.get("link") == target_link:
+                    found_item = it
+                    break
+        except Exception:
+            pass
+
+    # 3. Fallback defaults
+    if found_item:
+        raw_title = found_item.get("title", "তাজা সংবাদ - NewsBangla")
+        title = re.sub(r'\s*[-–|].*$', '', raw_title).strip()
+        paras = found_item.get("paragraphs", [])
+        desc = paras[0][:200] if paras else f"{title} সম্পর্কে বিস্তারিত পড়ুন NewsBangla-তে।"
+        raw_image = found_item.get("image") or ""
+        
+        # If image is base64 data URI, route through /api/article-image/{id} so Facebook/WhatsApp can crawl a real HTTP image URL
+        if raw_image.startswith("data:"):
+            image = f"https://newsbangla.vercel.app/api/article-image/{target_id}"
+        elif raw_image.startswith("http"):
+            image = raw_image
+        else:
+            image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
+    else:
+        title = "NewsBangla - তাজা সংবাদ ২৪/৭"
+        desc = "বাংলাদেশের সর্বাধুনিক অনলাইন সংবাদ মাধ্যম NewsBangla।"
+        image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
+
+    import html
+    escaped_title = html.escape(title)
+    escaped_desc = html.escape(desc)
+    escaped_image = html.escape(image)
+    
+    canonical_share_url = f"https://newsbangla.vercel.app/article/{target_id or 'news'}"
+    app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="bn" prefix="og: http://ogp.me/ns#">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{escaped_title} | NewsBangla</title>
+    <meta name="description" content="{escaped_desc}">
+
+    <!-- Open Graph / Facebook / WhatsApp / Messenger -->
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="NewsBangla">
+    <meta property="og:url" content="{canonical_share_url}">
+    <meta property="og:title" content="{escaped_title}">
+    <meta property="og:description" content="{escaped_desc}">
+    <meta property="og:image" content="{escaped_image}">
+    <meta property="og:image:secure_url" content="{escaped_image}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{escaped_title}">
+    <meta name="twitter:description" content="{escaped_desc}">
+    <meta name="twitter:image" content="{escaped_image}">
+
+    <!-- Instant client redirect to full article in app/web -->
+    <meta http-equiv="refresh" content="0;url={app_redirect_url}">
+    <script>
+        window.location.replace("{app_redirect_url}");
+    </script>
+</head>
+<body style="font-family:'Hind Siliguri', sans-serif; background:#f8fafc; color:#0f172a; padding:40px 20px; text-align:center;">
+    <div style="max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+        <img src="{escaped_image}" alt="{escaped_title}" style="max-width:100%; height:auto; border-radius:10px; margin-bottom:16px; object-fit:cover; max-height:300px;">
+        <h1 style="font-size:20px; line-height:1.4; color:#0f172a; margin-bottom:12px;">{escaped_title}</h1>
+        <p style="font-size:14px; color:#475569; line-height:1.6; margin-bottom:20px;">{escaped_desc}</p>
+        <a href="{app_redirect_url}" style="display:inline-block; background:#dc2626; color:#ffffff; text-decoration:none; padding:10px 22px; border-radius:30px; font-weight:700; font-size:14px;">সম্পূর্ণ খবর পড়ুন</a>
+    </div>
+</body>
+</html>"""
+    return Response(content=html_content, media_type="text/html; charset=utf-8")
+
+@app.get("/api/share")
+def share_article_endpoint(article: Optional[str] = Query(None), link: Optional[str] = Query(None)):
+    return render_social_share_page(article or "", link or "")
+
+@app.get("/article/{article_id}")
+def direct_article_share_endpoint(article_id: str):
+    return render_social_share_page(article_id)
+
+@app.get("/api/article-image/{article_id}")
+def serve_article_image(article_id: str):
+    import base64
+    found_item = None
+    try:
+        admin_articles = read_persisted_admin_articles()
+        for a in admin_articles:
+            if a.get("id") == article_id:
+                found_item = a
+                break
+    except Exception:
+        pass
+
+    if found_item and found_item.get("image"):
+        img_str = found_item.get("image")
+        if img_str.startswith("data:"):
+            try:
+                # parse data:image/xxx;base64,...
+                header, b64_data = img_str.split(",", 1)
+                mime = "image/jpeg"
+                if "png" in header: mime = "image/png"
+                elif "webp" in header: mime = "image/webp"
+                binary_data = base64.b64decode(b64_data)
+                return Response(content=binary_data, media_type=mime)
+            except Exception:
+                pass
+        elif img_str.startswith("http"):
+            return Response(status_code=302, headers={"Location": img_str})
+
+    # Default fallback image
+    return Response(status_code=302, headers={"Location": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"})
+
+
 @app.get("/api/article")
 def get_article(url: str = Query(...)):
     paras = []
