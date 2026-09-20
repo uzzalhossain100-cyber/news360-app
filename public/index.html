@@ -8926,9 +8926,6 @@ function selectSource(sourceId) {
       // NewsBangla Requirement:
       // "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
       currentSource = sourceId;
-      if (sourceId === 'newsbangla' && isAdminLoggedIn()) {
-        autoCurateNewsForNewsBanglaDesk();
-      }
       document.querySelectorAll('.bottom-source-btn').forEach(function(btn) {
         if (btn.getAttribute('data-source') === sourceId) {
           btn.classList.add('active');
@@ -9406,35 +9403,49 @@ function selectSource(sourceId) {
       });
 
       // Filter by newspaper source
-      if (currentSource !== 'all') {
+      if (currentSource === 'all') {
+        // In "সকল সংবাদ" feed, strictly exclude any unpublished items for everybody!
+        items = items.filter(function(item) {
+          if (item.is_custom || item.source_id === 'newsbangla') {
+            return item.published === true || (item.published_at && item.published_at > 0);
+          }
+          return true;
+        });
+      } else {
         items = items.filter(function(item) { return item.source_id === currentSource; });
       }
 
       // Handle NewsBangla Admin Status Filter & Filter Bar display
       const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
-      if (currentSource === 'newsbangla' && isAdmin) {
-        if (nbFilterBar) nbFilterBar.style.display = 'flex';
-        
-        // Count all, published and unpublished
-        const allNBItems = allNewsItems.filter(it => it.source_id === 'newsbangla' && !it.hidden);
-        const countAll = allNBItems.length;
-        const countPub = allNBItems.filter(it => it.published === true || (it.published_at && it.published_at > 0)).length;
-        const countUnpub = allNBItems.filter(it => !it.published && !it.published_at).length;
+      if (currentSource === 'newsbangla') {
+        const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
+        if (isAdmin) {
+          if (nbFilterBar) nbFilterBar.style.display = 'flex';
+          
+          const allNBItems = (allNewsItems || []).filter(it => (it.source_id === 'newsbangla' || it.is_custom) && !it.hidden);
+          const countAll = allNBItems.length;
+          const countPub = allNBItems.filter(it => it.published === true || (it.published_at && it.published_at > 0)).length;
+          const countUnpub = allNBItems.filter(it => !it.published && !it.published_at).length;
 
-        const elAll = document.getElementById('nbCountAll');
-        const elPub = document.getElementById('nbCountPub');
-        const elUnpub = document.getElementById('nbCountUnpub');
-        if (elAll) elAll.innerText = bnDigits(countAll);
-        if (elPub) elPub.innerText = bnDigits(countPub);
-        if (elUnpub) elUnpub.innerText = bnDigits(countUnpub);
+          const elAll = document.getElementById('nbCountAll');
+          const elPub = document.getElementById('nbCountPub');
+          const elUnpub = document.getElementById('nbCountUnpub');
+          if (elAll) elAll.innerText = bnDigits(countAll);
+          if (elPub) elPub.innerText = bnDigits(countPub);
+          if (elUnpub) elUnpub.innerText = bnDigits(countUnpub);
 
-        // Filter based on admin status toggle:
-        if (currentNewsBanglaAdminStatusFilter === 'published') {
+          if (currentNewsBanglaAdminStatusFilter === 'unpublished') {
+            items = items.filter(it => !it.published && !it.published_at);
+          } else if (currentNewsBanglaAdminStatusFilter === 'published') {
+            items = items.filter(it => it.published === true || (it.published_at && it.published_at > 0));
+          }
+        } else {
+          if (nbFilterBar) nbFilterBar.style.display = 'none';
+          // General user on NewsBangla page strictly sees published items only!
           items = items.filter(it => it.published === true || (it.published_at && it.published_at > 0));
-        } else if (currentNewsBanglaAdminStatusFilter === 'unpublished') {
-          items = items.filter(it => !it.published && !it.published_at);
         }
       } else {
+        const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
         if (nbFilterBar) nbFilterBar.style.display = 'none';
       }
 
@@ -10842,9 +10853,12 @@ function selectSource(sourceId) {
       saveAdminCustomArticles(customArticles);
       integrateCustomArticles();
       resetAdminForm();
-      renderAdminNewsList();
+      integrateCustomArticles();
       renderNewsGrid();
       updateTicker();
+      setTimeout(function() {
+        selectSource('newsbangla');
+      }, 300);
     }
 
     
@@ -11341,25 +11355,29 @@ function editCustomArticle(id) {
         container.appendChild(cardRow);
       });
     }function integrateCustomArticles() {
-      const nowSec = Math.floor(Date.now() / 1000);
       const customArticles = getAdminCustomArticles();
+      const isAdmin = isAdminLoggedIn();
 
-      // Strict User Requirement:
-      // "সকল সংবাদ পেজে এডমিন ক্লিক করলে আনপাবলিশ খবরগুলোও দেখায় যা দেখাবে না। আনপাবলিশ খবর শুধু এডমিন প্যানেলে প্রকাশিত সংবাদের তালিকা ও ব্যবস্থাপনায় দেখতে পাবেন।"
-      // Therefore, in public feeds (allNewsItems), ONLY strictly published articles are integrated!
-      const activeCustom = customArticles.filter(function(it) {
-        if (it.hidden) return false;
-        return it.published === true || (it.published_at && it.published_at > 0);
-      });
+      // If Admin is logged in, include all non-hidden custom articles in allNewsItems
+      // so Admin can view them on the NewsBangla page under both published & unpublished filters!
+      // If general user, strictly include ONLY published articles!
+      let activeCustom;
+      if (isAdmin) {
+        activeCustom = customArticles.filter(it => !it.hidden);
+      } else {
+        activeCustom = customArticles.filter(function(it) {
+          if (it.hidden) return false;
+          return it.published === true || (it.published_at && it.published_at > 0);
+        });
+      }
 
-      // Sort activeCustom: newest published_at / timestamp first
+      // Sort: newest first
       activeCustom.sort(function(a, b) {
-        const timeA = a.published_at || a.timestamp || 0;
-        const timeB = b.published_at || b.timestamp || 0;
+        const timeA = Number(a.published_at || a.timestamp || 0);
+        const timeB = Number(b.published_at || b.timestamp || 0);
         return timeB - timeA;
       });
 
-      // Register article details into INITIAL_ARTICLES_DATA for full news reader modal
       activeCustom.forEach(function(it) {
         const effectiveTime = it.published_at || it.timestamp;
         if (effectiveTime) {
@@ -11376,7 +11394,7 @@ function editCustomArticle(id) {
         }
       });
 
-      const existingNonCustom = allNewsItems.filter(it => !it.is_custom);
+      const existingNonCustom = (allNewsItems || []).filter(it => !it.is_custom);
       allNewsItems = activeCustom.concat(existingNonCustom);
     }
 
