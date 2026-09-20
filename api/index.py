@@ -334,12 +334,23 @@ def fetch_jugantor_live(now_ts):
             html_text = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html_text, 'html.parser')
             seen_links = set()
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
+            # Jugantor often has article links wrapping h1-h4 or article cards
+            for card in soup.find_all(['div', 'article', 'li']):
+                a_tag = card.find('a')
+                if not a_tag: continue
+                h = a_tag.get('href', '')
                 if not h: continue
                 parts = h.strip('/').split('/')
                 if len(parts) >= 2 and parts[-1].isdigit():
-                    t = a.get_text().strip()
+                    # Title can be inside card or inside 'a'
+                    t = card.get_text().strip()
+                    # if card text is too long, get just the heading
+                    h_tag = card.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                    if h_tag:
+                        t = h_tag.get_text().strip()
+                    else:
+                        t = a_tag.get_text().strip()
+
                     if not is_clean_headline(t, h): continue
 
                     full_url = h if h.startswith('http') else ('https://www.jugantor.com' + ('' if h.startswith('/') else '/') + h)
@@ -347,7 +358,7 @@ def fetch_jugantor_live(now_ts):
                     seen_links.add(full_url)
 
                     img = ''
-                    img_tag = a.find('img')
+                    img_tag = card.find('img') or a_tag.find('img')
                     if img_tag:
                         img = img_tag.get('src') or img_tag.get('data-src') or ''
                     if not img or not img.startswith('http'):
