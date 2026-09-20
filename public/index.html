@@ -1946,6 +1946,10 @@
       <button class="bottom-source-btn active" data-source="all" onclick="selectSource('all')">
         সকল সংবাদ (১০টি)
       </button>
+      <button class="bottom-source-btn" data-source="newsbangla" onclick="selectSource('newsbangla')" style="background:linear-gradient(135deg, #e11d48, #be123c); color:#ffffff; font-weight:700; border:none; box-shadow:0 2px 8px rgba(225,29,72,0.35);">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ffffff;"></span>
+        নিউজবাংলা (NewsBangla)
+      </button>
       <button class="bottom-source-btn" data-source="channel24" onclick="selectSource('channel24')">
         <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0284c7;"></span>
         চ্যানেল ২৪
@@ -8470,6 +8474,7 @@
       bbc: 'https://ichef.bbci.co.uk/news/1200/branded_bengali/262b/live/51c55dd0-b30a-11f1-ba3a-274c672664f6.jpg'
     };
     const SOURCE_COLORS = {
+      newsbangla: '#e11d48',
       prothomalo: '#e11d48',
       bbc: '#dc2626',
       bdpratidin: '#16a34a',
@@ -8480,6 +8485,7 @@
     };
 
     const SOURCE_NAMES = {
+      newsbangla: 'নিউজবাংলা (NewsBangla)',
       prothomalo: 'প্রথম আলো',
       bbc: 'বিবিসি বাংলা',
       bdpratidin: 'বাংলাদেশ প্রতিদিন',
