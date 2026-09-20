@@ -92,7 +92,7 @@ def extract_full_article(url):
     headers = headers_browser if ('prothomalo' in url or 'bbc' in url) else headers_social
     try:
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=2.5) as r:
+        with urllib.request.urlopen(req, timeout=3.0) as r:
             html = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html, 'html.parser')
 
@@ -110,13 +110,28 @@ def extract_full_article(url):
 
             seen = set()
             skip_kw = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব']
+            
+            # 1. First scan all <p> tags
             for p in soup.find_all('p'):
                 txt = p.get_text(strip=True)
-                if len(txt) > 28 and not is_video_or_bulletin(txt):
+                if len(txt) > 20 and not is_video_or_bulletin(txt):
                     if not re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
                         if txt not in seen and not any(k in txt for k in skip_kw):
                             seen.add(txt)
                             paras.append(txt)
+
+            # 2. If <p> tags are fewer than 2, also extract from content container divs
+            if len(paras) < 2:
+                container = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|article)', re.I))
+                if container:
+                    for d in container.find_all(['div', 'section', 'span']):
+                        if not d.find(['p', 'div']): # deepest block
+                            txt = d.get_text(strip=True)
+                            if len(txt) > 35 and not is_video_or_bulletin(txt):
+                                if not re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
+                                    if txt not in seen and not any(k in txt for k in skip_kw):
+                                        seen.add(txt)
+                                        paras.append(txt)
     except Exception:
         pass
     return image, paras[:15]

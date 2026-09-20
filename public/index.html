@@ -9045,7 +9045,7 @@
 
         const combinedMap = new Map();
 
-        // Fresh items first - mark and count new
+        // Fresh items first - mark and count new, AND always overwrite any old stale card
         freshItems.forEach(it => {
           const matchesCurrentCategory = (targetCategory === 'all' || it.category === targetCategory);
           const matchesCurrentSource = (targetSource === 'all' || it.source_id === targetSource);
@@ -9056,13 +9056,12 @@
               addedCount++;
             }
           } else if (forceRefresh && matchesCurrentCategory && matchesCurrentSource) {
-            // When user explicitly clicks refresh, also flag current matching top items as refreshed
             it.is_refreshed = true;
           }
+          // Set or update directly so fresh real CDN images and full paragraphs immediately replace any old data!
           combinedMap.set(it.link, it);
         });
 
-        // When forceRefresh is true, ensure at least some fresh feedback if items were reloaded
         if (forceRefresh && addedCount === 0 && freshItems.length > 0) {
           const matchingLoaded = freshItems.filter(it => (targetCategory === 'all' || it.category === targetCategory) && (targetSource === 'all' || it.source_id === targetSource));
           if (matchingLoaded.length > 0) {
@@ -9071,7 +9070,7 @@
           }
         }
 
-        // Existing items (excluding custom articles, they are re-injected cleanly)
+        // Existing items only if not already in fresh items
         allNewsItems.forEach(it => {
           if (!it.is_custom && !combinedMap.has(it.link)) {
             combinedMap.set(it.link, it);
