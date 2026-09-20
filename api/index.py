@@ -523,6 +523,36 @@ def fetch_targeted_category_news(target_category, target_source=None, limit=50):
 
 
 
+
+def load_pristine_catalog():
+    # 1. Same directory (api/initial_news.json) - Always bundled in Vercel!
+    p1 = os.path.join(os.path.dirname(__file__), "initial_news.json")
+    if os.path.exists(p1):
+        try:
+            with open(p1, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # 2. Public directory
+    p2 = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
+    if os.path.exists(p2):
+        try:
+            with open(p2, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # 3. Vercel live static endpoint
+    try:
+        req = urllib.request.Request("https://newsbangla.vercel.app/initial_news.json", headers={"User-Agent": "NewsBanglaInternal"})
+        with urllib.request.urlopen(req, timeout=3) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except Exception:
+        pass
+    return []
+
+
 def curate_into_newsbangla(item):
     orig_title = item.get('title', '').strip()
     clean_t = re.sub(r'\s*[-–|].*$', '', orig_title).strip()
@@ -602,16 +632,10 @@ def get_news(
 
     if source == 'newsbangla':
         # Curate directly from pristine local repository and live scrapers!
-        try:
-            local_json_path = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
-            if os.path.exists(local_json_path):
-                with open(local_json_path, "r", encoding="utf-8") as f:
-                    local_items = json.load(f)
-                    for it in local_items:
-                        c_it = curate_into_newsbangla(it)
-                        news.append(c_it)
-        except Exception:
-            pass
+        local_items = load_pristine_catalog()
+        for it in local_items:
+            c_it = curate_into_newsbangla(it)
+            news.append(c_it)
     elif source and source != 'all' and source in fetch_map:
         news.extend(fetch_map[source](now_ts))
     else:
@@ -627,16 +651,10 @@ def get_news(
 
     # Fallback to local initial news if live fetch count is low
     if len(news) < 5:
-        try:
-            local_json_path = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
-            if os.path.exists(local_json_path):
-                with open(local_json_path, "r", encoding="utf-8") as f:
-                    local_items = json.load(f)
-                    for it in local_items:
-                        if not source or source == 'all' or it.get('source_id') == source:
-                            news.append(it)
-        except Exception:
-            pass
+        local_items = load_pristine_catalog()
+        for it in local_items:
+            if not source or source == 'all' or it.get('source_id') == source:
+                news.append(it)
 
     # Filter out any video content strictly
     clean_news = []
