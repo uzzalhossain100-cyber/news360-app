@@ -1,5 +1,6 @@
 import concurrent.futures
 from fastapi import FastAPI, Query, Response, Request
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import json
@@ -888,8 +889,9 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     return HTMLResponse(content=html_content, status_code=200)
 
 @app.get("/article/{article_id:path}")
-def direct_article_share_endpoint(article_id: str):
-    return render_social_share_page(article_id, None)
+def direct_article_share_endpoint(article_id: str, request: Request):
+    user_agent = request.headers.get("user-agent", "")
+    return render_social_share_page(article_id=article_id, direct_link=None, user_agent=user_agent)
 
 @app.get("/api/article-image/{article_id}")
 def serve_article_image(article_id: str):
