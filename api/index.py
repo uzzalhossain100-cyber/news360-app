@@ -601,8 +601,17 @@ def get_news(
     }
 
     if source == 'newsbangla':
-        # Fast direct curation from pristine cache!
-        pass
+        # Curate directly from pristine local repository and live scrapers!
+        try:
+            local_json_path = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
+            if os.path.exists(local_json_path):
+                with open(local_json_path, "r", encoding="utf-8") as f:
+                    local_items = json.load(f)
+                    for it in local_items:
+                        c_it = curate_into_newsbangla(it)
+                        news.append(c_it)
+        except Exception:
+            pass
     elif source and source != 'all' and source in fetch_map:
         news.extend(fetch_map[source](now_ts))
     else:
