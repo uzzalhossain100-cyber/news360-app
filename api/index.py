@@ -243,7 +243,7 @@ def fetch_prothomalo_live(now_ts):
         req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3.5) as r:
             root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:25]:
+            for it in root.findall('.//item')[:30]:
                 t_elem = it.find('title')
                 l_elem = it.find('link')
                 pd_elem = it.find('pubDate')
@@ -252,22 +252,57 @@ def fetch_prothomalo_live(now_ts):
                 l = l_elem.text.strip() if (l_elem is not None and l_elem.text) else ''
                 if not is_clean_headline(t, l) or l in seen: continue
                 
-                # Check pubDate from feed
                 dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
                 if dt_obj and dt_obj.date() != current_date:
-                    continue # Exclude if not matching current date
-                
+                    continue
+
                 seen.add(l)
-                candidates.append((t, l, dt_obj))
+                
+                # Instant high-res image directly from RSS tags
+                feed_img = ''
+                media_c = it.find('{http://search.yahoo.com/mrss/}content')
+                if media_c is not None and 'url' in media_c.attrib:
+                    feed_img = media_c.attrib['url']
+                if not feed_img:
+                    media_th = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                    if media_th is not None and 'url' in media_th.attrib:
+                        feed_img = media_th.attrib['url']
+                
+                # Instant full paragraphs directly from RSS content:encoded
+                feed_paras = []
+                c_enc = it.find('{http://purl.org/rss/1.0/modules/content/}encoded')
+                if c_enc is not None and c_enc.text:
+                    soup_c = BeautifulSoup(c_enc.text, 'html.parser')
+                    for p in soup_c.find_all('p'):
+                        txt = p.get_text(strip=True)
+                        if len(txt) > 20 and not is_video_or_bulletin(txt):
+                            feed_paras.append(txt)
+                
+                if not feed_paras:
+                    desc_elem = it.find('description')
+                    if desc_elem is not None and desc_elem.text:
+                        txt_d = BeautifulSoup(desc_elem.text, 'html.parser').get_text(strip=True)
+                        if len(txt_d) > 20: feed_paras.append(txt_d)
+
+                candidates.append((t, l, dt_obj, feed_img, feed_paras))
     except Exception:
         pass
 
     def build_item(c):
-        t, l, dt_obj = c
-        img, paras, page_dt = extract_full_article(l)
-        effective_dt = dt_obj or page_dt
+        t, l, dt_obj, feed_img, feed_paras = c
+        img = feed_img
+        paras = feed_paras
+        
+        # If image or paras are missing, scrape page
+        if not img or len(paras) < 2:
+            page_img, page_paras, page_dt = extract_full_article(l)
+            if not img: img = page_img
+            if len(paras) < 2 and page_paras: paras = page_paras
+            if not dt_obj and page_dt: dt_obj = page_dt
+
+        effective_dt = dt_obj
         if effective_dt and effective_dt.date() != current_date:
-            return None # Must match current date
+            return None
 
         article_ts = int(effective_dt.timestamp()) if effective_dt else int(now_ts)
         if not img:

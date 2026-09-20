@@ -8576,7 +8576,39 @@
       return String(num).split('').map(function(c) { return bn[c] || c; }).join('');
     }
 
-    function calculateTimeAgo(timestamp) {
+    
+    // Format Exact Bangla Publication Date & Time
+    // User Requirement:
+    // "প্রতিটি খবরে ক্লিক করলে ঐ খবরের সঠিক প্রকাশ তারিখ ও সময় দেখাবে আর যখন কোন খবরে ক্লিক করা হবে না তখন সেই খবর কত আগে তা দেখাবে।"
+    function formatExactBanglaDateTime(timestamp) {
+      if (!timestamp || timestamp <= 0) return 'প্রকাশ: আজকের তাজা খবর';
+      const d = new Date(timestamp * 1000);
+      
+      const weekdays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+      const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+      
+      const weekdayName = weekdays[d.getDay()];
+      const dayNum = bnDigits(d.getDate());
+      const monthName = months[d.getMonth()];
+      const yearNum = bnDigits(d.getFullYear());
+
+      let hours = d.getHours();
+      const minutes = d.getMinutes();
+      let ampm = 'সকাল';
+      if (hours >= 12 && hours < 15) ampm = 'দুপুর';
+      else if (hours >= 15 && hours < 18) ampm = 'বিকাল';
+      else if (hours >= 18 && hours < 20) ampm = 'সন্ধ্যা';
+      else if (hours >= 20 || hours < 6) ampm = 'রাত';
+      else ampm = 'সকাল';
+
+      const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+      const hourStr = bnDigits(displayHour);
+      const minStr = bnDigits(minutes < 10 ? '0' + minutes : minutes);
+
+      return 'প্রকাশ: ' + weekdayName + ', ' + dayNum + ' ' + monthName + ' ' + yearNum + ' | ' + ampm + ' ' + hourStr + ':' + minStr + ' মি.';
+    }
+
+function calculateTimeAgo(timestamp) {
       if (!timestamp || timestamp <= 0) return 'আজকের খবর';
       const now = Math.floor(Date.now() / 1000);
       const diff = Math.max(0, now - Math.floor(timestamp));
@@ -9181,7 +9213,7 @@ function selectSource(sourceId) {
         }
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 28000);
         const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
         if (resp.ok) {
@@ -9886,7 +9918,7 @@ function selectSource(sourceId) {
 
       document.getElementById('modalArticleTitle').innerText = item.title;
       document.getElementById('modalMetaSource').innerHTML = '<strong>উৎস:</strong> ' + item.source_name + ' &bull; ' + (CATEGORY_NAMES[item.category] || 'জাতীয়');
-      document.getElementById('modalMetaTime').innerText = 'সময়: ' + (item.time_ago || 'এইমাত্র') + (item.published ? ' (' + item.published + ')' : '');
+      document.getElementById('modalMetaTime').innerHTML = '<span style="color:var(--text-main); font-weight:700;">' + formatExactBanglaDateTime(item.published_at || item.timestamp) + '</span>' + (item.time_ago ? ' <span style="background:#fee2e2; color:#b91c1c; font-size:11px; padding:2px 7px; border-radius:12px; margin-left:6px; font-weight:700;">' + item.time_ago + '</span>' : '');
 
       // Instant Image Display from item
       const brandImg = FALLBACK_BRAND_IMAGES[item.source_id] || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80';
