@@ -1,3 +1,7 @@
 fastapi
 beautifulsoup4
 edge-tts
+
+googlenewsdecoder
+requests
+selectolax

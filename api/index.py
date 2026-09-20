@@ -862,8 +862,17 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
         except Exception:
             pass
 
+    # Select optimal header to bypass Cloudflare protection
+    if 'jugantor.com' in real_url:
+        headers = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
+    elif any(d in real_url for d in ['ittefaq.com.bd', 'bd-pratidin.com', 'kalerkantho.com']):
+        headers = {'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
+    elif any(d in real_url for d in ['prothomalo.com', 'bbc.com', 'channel24bd.tv', 'ntvbd.com', 'rtvonline.com', 'bangla.bdnews24.com']):
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    else:
+        headers = {'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
+
     try:
-        headers = headers_browser if ('prothomalo' in real_url or 'bbc' in real_url) else headers_social
         req = urllib.request.Request(real_url, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as r:
             html_content = r.read().decode('utf-8', errors='ignore')
@@ -896,13 +905,12 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
             for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript', 'button']):
                 tag.decompose()
 
-            # Robust paragraph extraction across all Bangladeshi newspaper structures
+            # Target article body containers first if available
+            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I))
+            search_scope = article_body if article_body else soup
+
             seen_paras = set()
             skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন']
-            
-            # 1. Target article body containers first if available
-            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body)', re.I))
-            search_scope = article_body if article_body else soup
 
             for p in search_scope.find_all('p'):
                 txt = p.get_text(strip=True)
@@ -912,13 +920,13 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
                     if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
                         seen_paras.add(txt)
                         paras.append(txt)
-    except Exception:
+    except Exception as e:
         pass
 
     return {
         "title": title or title_hint or "",
         "image": image,
-        "paragraphs": paras[:30]
+        "paragraphs": paras[:35]
     }
 
 
