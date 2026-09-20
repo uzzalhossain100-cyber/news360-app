@@ -90,27 +90,65 @@ def is_clean_headline(t, u=""):
     return True
 
 def detect_cat(title, url=""):
-    t = title.lower()
-    sportsWords = ['ক্রিকেট', 'ফুটবল', 'মেসি', 'রোনালদো', 'অধিনায়ক', 'বিশ্বকাপ', 'উইকেট', 'গোল', 'ম্যাচ', 'সিরিজ', 'বিসিবি', 'ফিফা', 'সাকিব', 'তামিম', 'বোলার', 'ব্যাটসম্যান', 'অলরাউন্ডার', 'টেনিস', 'টুর্নামেন্ট', 'খেলা', 'স্টেডিয়াম']
+    u = (url or "").lower()
+    t = (title or "").lower()
+
+    # 1. First priority: Direct URL category slugs (Newspapers structure URLs accurately)
+    if any(k in u for k in ['/sports/', '/sport/', '/khela/', '/cricket/', '/football/', '/champions-trophy/', '/worldcup/']):
+        return 'sports'
+    if any(k in u for k in ['/entertainment/', '/binodon/', '/showbiz/', '/cinema/', '/glitz/']):
+        return 'entertainment'
+    if any(k in u for k in ['/tech/', '/technology/', '/it/', '/projukti/', '/gadget/']):
+        return 'tech'
+    if any(k in u for k in ['/economy/', '/business/', '/arthoniti/', '/banijjo/', '/stock/']):
+        return 'economy'
+    if any(k in u for k in ['/international/', '/world/', '/bidesh/', '/prabash/']):
+        return 'international'
+
+    # 2. Strict Headline Keywords Analysis (Sports checked first so financial terms in sports don't misclassify)
+    sportsWords = [
+        'ক্রিকেট', 'ফুটবল', 'মেসি', 'রোনালদো', 'অধিনায়ক', 'বিশ্বকাপ', 'উইকেট', 'গোল', 'ম্যাচ',
+        'সিরিজ', 'বিসিবি', 'ফিফা', 'সাকিব', 'তামিম', 'বোলার', 'ব্যাটসম্যান', 'অলরাউন্ডার', 'টেনিস',
+        'টুর্নামেন্ট', 'খেলা', 'স্টেডিয়াম', 'হাফসেঞ্চুরি', 'সেঞ্চুরি', 'রানের জয়', 'রান তুলে',
+        'বিপিএল', 'আইপিএল', 'চ্যাম্পিয়ন্স ট্রফি', 'পেসার', 'স্পিনার', 'ডার্বি', 'লা লিগা', 'রিয়াল মাদ্রিদ',
+        'বার্সেলোনা', 'ম্যানচেস্টার', 'লিভারপুল', 'টাইগার', 'মুশফিক', 'শান্ত', 'মিরাজ', 'লিটন দাস', 'তাসকিন'
+    ]
     for w in sportsWords:
         if w in t: return 'sports'
-    entWords = ['সিনেমা', 'নাটক', 'চলচ্চিত্র', 'হলিউড', 'বলিউড', 'ঢালিউড', 'শাকিব খান', 'তারকা', 'বিনোদন', 'মিউজিক ভিডিও', 'ফিল্ম', 'কনসার্ট', 'গায়িকা', 'গায়ক', 'ওটিটি', 'নায়ক', 'নায়িকা', 'অভিনেতা', 'অভিনেত্রী', 'গান']
+
+    entWords = [
+        'সিনেমা', 'নাটক', 'চলচ্চিত্র', 'হলিউড', 'বলিউড', 'ঢালিউড', 'শাকিব খান', 'তারকা', 'বিনোদন',
+        'মিউজিক ভিডিও', 'ফিল্ম', 'কনসার্ট', 'গায়িকা', 'গায়ক', 'ওটিটি', 'নায়ক', 'নায়িকা', 'অভিনেতা',
+        'অভিনেত্রী', 'গান', 'অ্যালবাম', 'গীতিকার', 'সুরকার', 'পরিচালক', 'শুটিং', 'রিলিজ', 'ট্রেলার', 'টিজার'
+    ]
     for w in entWords:
         if w in t: return 'entertainment'
-    techWords = ['প্রযুক্তি', 'স্মার্টফোন', 'আইফোন', 'এআই', 'কৃত্রিম বুদ্ধিমত্তা', 'অ্যাপল', 'ফেসবুক', 'গুগল', 'ইন্টারনেট', 'কম্পিউটার', 'হোয়াটসঅ্যাপ', 'সাইবার', 'রোবট', 'টেলিযোগাযোগ', 'ডিজিটাল', 'ড্রোন', 'সফটওয়্যার', 'গ্যাজেট', 'আইওএস', 'অ্যান্ড্রয়েড', 'মেটা', 'মাইক্রোসফট', 'মহাকাশ', 'নাসা', 'চ্যাটজিপিটি']
+
+    techWords = [
+        'প্রযুক্তি', 'স্মার্টফোন', 'আইফোন', 'এআই', 'কৃত্রিম বুদ্ধিমত্তা', 'অ্যাপল', 'ফেসবুক', 'গুগল',
+        'ইন্টারনেট', 'কম্পিউটার', 'হোয়াটসঅ্যাপ', 'সাইবার', 'রোবট', 'টেলিযোগাযোগ', 'ডিজিটাল', 'ড্রোন',
+        'সফটওয়্যার', 'গ্যাজেট', 'আইওএস', 'অ্যান্ড্রয়েড', 'মেটা', 'মাইক্রোসফট', 'মহাকাশ', 'নাসা', 'চ্যাটজিপিটি', 'আইটি'
+    ]
     for w in techWords:
         if w in t: return 'tech'
-    econWords = ['অর্থনীতি', 'শেয়ারবাজার', 'পুঁজিবাজার', 'ডলার', 'মুদ্রাস্ফীতি', 'স্বর্ণের দাম', 'বাজেট', 'রাজস্ব', 'রপ্তানি', 'আমদানি', 'রেমিট্যান্স', 'জ্বালানি', 'বাণিজ্য', 'ব্যবসায়ী', 'মূল্যবৃদ্ধি', 'আইএমএফ', 'ভ্যাট', 'এলএনজি', 'সোনা', 'ব্যাংকিং', 'বাংলাদেশ ব্যাংক']
+
+    econWords = [
+        'অর্থনীতি', 'শেয়ারবাজার', 'পুঁজিবাজার', 'ডলারের দাম', 'মুদ্রাস্ফীতি', 'স্বর্ণের দাম', 'বাজেট',
+        'রাজস্ব', 'রপ্তানি আয়', 'আমদানি ব্যয়', 'রেমিট্যান্স', 'এলএনজি', 'আইএমএফ', 'ভ্যাট', 'ব্যাংকিং',
+        'বাংলাদেশ ব্যাংক', 'মূল্যস্ফীতি', 'টাকা পাচার', 'খেলাপি ঋণ', 'বাণিজ্য ঘাটতি', 'করদাতা', 'জিডিপি'
+    ]
     for w in econWords:
         if w in t: return 'economy'
-    intlWords = ['যুক্তরাষ্ট্র', 'চীন', 'ভারত', 'পাকিস্তান', 'রাশিয়া', 'ইউক্রেন', 'ইসরায়েল', 'গাজা', 'ফিলিস্তিন', 'ইরান', 'আন্তর্জাতিক', 'ট্রাম্প', 'বাইডেন', 'জাতিসংঘ', 'মধ্যপ্রাচ্য', 'ব্রিটেন', 'নেপাল', 'আমেরিকা', 'লেবানন', 'পুতিন']
+
+    intlWords = [
+        'যুক্তরাষ্ট্র', 'চীন', 'ভারত', 'পাকিস্তান', 'রাশিয়া', 'ইউক্রেন', 'ইসরায়েল', 'গাজা', 'ফিলিস্তিন',
+        'ইরান', 'আন্তর্জাতিক', 'ট্রাম্প', 'বাইডেন', 'জাতিসংঘ', 'মধ্যপ্রাচ্য', 'ব্রিটেন', 'নেপাল', 'আমেরিকা',
+        'লেবানন', 'পুতিন', 'হোয়াইট হাউস', 'পেন্টাগন', 'ইউরোপীয়', 'সিরিয়া', 'ইয়েমেন', 'সীমান্তে'
+    ]
     for w in intlWords:
         if w in t: return 'international'
+
     return 'national'
-
-
-
-
 
 headers_social = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
@@ -807,14 +845,24 @@ def curate_into_newsbangla(item):
     }
 
 
+_CACHE_NEWS_TIME = 0
+_CACHE_NEWS_DATA = {}
+
 @app.get("/api/news")
 def get_news(
     category: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
-    limit: int = Query(100)
+    limit: int = Query(100),
+    force_refresh: bool = Query(False)
 ):
-    news = []
+    global _CACHE_NEWS_TIME, _CACHE_NEWS_DATA
     now_ts = time.time()
+    cache_key = f"{source}_{category}_{limit}"
+
+    # Return cached data within 40 seconds unless force_refresh requested
+    if not force_refresh and (now_ts - _CACHE_NEWS_TIME < 40) and cache_key in _CACHE_NEWS_DATA:
+        return _CACHE_NEWS_DATA[cache_key]
+    news = []
     
     # 1. SPECIAL CASE: NewsBangla Exclusive Source
     # Requirement: "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
@@ -898,11 +946,16 @@ def get_news(
     # Strict chronological sorting: newest publication timestamp first
     clean_news.sort(key=lambda x: (x.get("published_at") or x.get("timestamp") or 0), reverse=True)
 
-    return {
+    
+    res_dict = {
         "status": "success",
         "count": len(clean_news[:limit]),
         "news": clean_news[:limit]
     }
+    _CACHE_NEWS_TIME = now_ts
+    _CACHE_NEWS_DATA[cache_key] = res_dict
+    return res_dict
+
 
 
 
