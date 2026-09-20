@@ -598,56 +598,58 @@ def get_article(url: str = Query(...)):
     try:
         headers = headers_browser if ('prothomalo' in url or 'bbc' in url) else headers_social
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=6) as r:
             html_content = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            # Title
-            h1 = soup.find('h1')
-            if h1:
-                title = h1.get_text(strip=True)
+            # Title extraction
+            og_title = soup.find('meta', property='og:title')
+            if og_title and og_title.get('content'):
+                title = og_title['content'].strip()
             if not title:
-                og_title = soup.find('meta', property='og:title')
-                if og_title and og_title.get('content'):
-                    title = og_title['content'].strip()
+                h1 = soup.find('h1')
+                if h1: title = h1.get_text(strip=True)
 
-            # Image
+            # High-resolution news image extraction
             og_img = soup.find('meta', property='og:image')
-            if og_img and og_img.get('content'):
+            if og_img and og_img.get('content') and og_img['content'].startswith('http'):
                 image = og_img['content'].strip()
             if not image:
                 tw_img = soup.find('meta', attrs={'name': 'twitter:image'})
-                if tw_img and tw_img.get('content'):
+                if tw_img and tw_img.get('content') and tw_img['content'].startswith('http'):
                     image = tw_img['content'].strip()
+            if not image:
+                for img in soup.find_all('img'):
+                    src = img.get('src') or img.get('data-src') or ''
+                    if src.startswith('http') and not any(k in src for k in ['logo', 'icon', 'advert', 'ad.', 'banner', 'share', 'avatar']):
+                        image = src
+                        break
 
-            # Clean content paragraphs
-            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript']):
+            # Strip script, style, comments, navigation, and advertisement wrappers
+            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript', 'button']):
                 tag.decompose()
 
-            # Try article container first if present
-            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|story|article|detail|news-details|news_content)', re.I)) or soup
-            
+            # Robust paragraph extraction across all Bangladeshi newspaper structures
             seen_paras = set()
-            for p in article_body.find_all('p'):
+            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব']
+            
+            for p in soup.find_all('p'):
                 txt = p.get_text(strip=True)
-                # Filter out video promos, copyright notices, and boilerplate
-                if len(txt) > 30 and not is_video_or_bulletin(txt):
-                    if txt not in seen_paras and not any(skip in txt for skip in ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন']):
+                if len(txt) > 28 and not is_video_or_bulletin(txt):
+                    if re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
+                        continue
+                    if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
                         seen_paras.add(txt)
                         paras.append(txt)
     except Exception:
         pass
-    return {"title": title, "image": image, "paragraphs": paras[:15]}
 
-def is_video_or_bulletin(text):
-    video_patterns = [
-        r'ভিডিও\s*বার্তা', r'ভিডিওতে\s*দেখুন', r'ভিডিও\s*(দেখুন|সহ|লিংক)',
-        r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'টকশো'
-    ]
-    for pat in video_patterns:
-        if re.search(pat, text, re.IGNORECASE):
-            return True
-    return False
+    return {
+        "title": title,
+        "image": image,
+        "paragraphs": paras[:25]
+    }
+
 
 @app.get("/api/tts")
 async def tts_stream(text: str = Query(...)):
