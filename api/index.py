@@ -199,7 +199,7 @@ def fetch_ittefaq_live(now_ts):
     items = []
     try:
         req = urllib.request.Request("https://www.ittefaq.com.bd/", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=3) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
             candidates = []
@@ -216,17 +216,19 @@ def fetch_ittefaq_live(now_ts):
                     candidates.append((t, full_url))
                     if len(candidates) >= 15: break
 
-            for t, u in candidates:
+            for idx, (t, u) in enumerate(candidates):
                 img = ''
-                try:
-                    rq = urllib.request.Request(u, headers=headers_social)
-                    with urllib.request.urlopen(rq, timeout=1.8) as resp:
-                        s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
-                        og = s.find('meta', property='og:image')
-                        if og and og.get('content') and og['content'].startswith('http'):
-                            img = og['content'].strip()
-                except Exception:
-                    pass
+                # Fast inline OG fetch for the top headlines
+                if idx < 4:
+                    try:
+                        rq = urllib.request.Request(u, headers=headers_social)
+                        with urllib.request.urlopen(rq, timeout=1.2) as resp:
+                            s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                            og = s.find('meta', property='og:image')
+                            if og and og.get('content') and og['content'].startswith('http'):
+                                img = og['content'].strip()
+                    except Exception:
+                        pass
                 if not img:
                     img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
 
