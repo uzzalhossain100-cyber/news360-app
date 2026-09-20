@@ -9611,16 +9611,23 @@ function selectSource(sourceId) {
 
     // Helper to generate a reliable direct deep-link URL for any article
     function getArticleDirectShareUrl(item) {
-      if (!item) return window.location.href;
+      if (!item) return 'https://newsbangla.vercel.app/';
       const baseUrl = 'https://newsbangla.vercel.app';
-      // Use /article/<id> so social media crawlers (Facebook, WhatsApp, Messenger) fetch dynamic OpenGraph tags
-      if (item.id) {
-        return baseUrl + '/article/' + encodeURIComponent(item.id);
+      
+      const idStr = String(item.id || '');
+      if (idStr.startsWith('custom_')) {
+        return baseUrl + '/article/' + encodeURIComponent(idStr);
       }
-      if (item.link) {
-        return baseUrl + '/article/' + encodeURIComponent(item.link);
+      
+      // Compute simple hash for external URLs so it's clean and safe
+      const linkStr = String(item.link || item.id || '');
+      let hash = 0;
+      for (let i = 0; i < linkStr.length; i++) {
+        hash = ((hash << 5) - hash) + linkStr.charCodeAt(i);
+        hash |= 0;
       }
-      return baseUrl;
+      const hexHash = 'nb_' + Math.abs(hash).toString(16);
+      return baseUrl + '/article/' + hexHash;
     }
 
     function shareArticleTo(channel) {
@@ -9653,31 +9660,22 @@ function selectSource(sourceId) {
       // 3. WhatsApp: Directly triggers WhatsApp App on mobile (whatsapp://) with fallback to web
       if (channel === 'whatsapp') {
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const waText = title + '\n\nবিস্তারিত সংবাদ:\n' + shareUrl;
         if (isMobile) {
-          // Triggers installed WhatsApp app ready to send
-          window.location.href = 'whatsapp://send?text=' + encodeURIComponent(textToShare);
+          window.location.href = 'whatsapp://send?text=' + encodeURIComponent(waText);
           setTimeout(function() {
-            window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(textToShare), '_blank');
+            window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(waText), '_blank');
           }, 800);
         } else {
-          window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(textToShare), '_blank');
+          window.open('https://web.whatsapp.com/send?text=' + encodeURIComponent(waText), '_blank');
         }
         return;
       }
 
-      // 4. Facebook: Opens Facebook app or share dialog
+      // 4. Facebook: Opens standard Facebook sharer without quote (quote is deprecated by Facebook Graph API)
       if (channel === 'facebook') {
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        if (isMobile) {
-          // Try Facebook app protocol first, fallback to browser share
-          const fbAppUrl = 'fb://facewebmodal/f?href=' + encodeURIComponent('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl));
-          window.location.href = fbAppUrl;
-          setTimeout(function() {
-            window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(title), '_blank', 'width=640,height=520');
-          }, 600);
-        } else {
-          window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(title), '_blank', 'width=640,height=520');
-        }
+        const fbUrl = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl);
+        window.open(fbUrl, '_blank', 'noopener,noreferrer,width=640,height=520');
         return;
       }
 
@@ -9744,14 +9742,40 @@ function selectSource(sourceId) {
         const targetId = articleId ? decodeURIComponent(articleId).trim() : '';
         const targetLink = articleLink ? decodeURIComponent(articleLink).trim() : '';
 
+        function getJsHash(s) {
+          if (!s) return '';
+          let hash = 0;
+          for (let i = 0; i < s.length; i++) {
+            hash = ((hash << 5) - hash) + s.charCodeAt(i);
+            hash |= 0;
+          }
+          return 'nb_' + Math.abs(hash).toString(16);
+        }
+
         function searchLocalAndLoaded() {
-          const list = (typeof getCustomArticles === 'function' ? getCustomArticles() : []).concat(typeof getAdminCustomArticles === 'function' ? getAdminCustomArticles() : []).concat(allNewsItems || []);
+          const list = (typeof getCustomArticles === 'function' ? getCustomArticles() : [])
+            .concat(typeof getAdminCustomArticles === 'function' ? getAdminCustomArticles() : [])
+            .concat(allNewsItems || []);
+
           if (targetId) {
-            const f = list.find(it => it && (it.id === targetId || String(it.id).toLowerCase() === targetId.toLowerCase() || it.link === targetId || ('newsbangla-' + it.id) === targetId));
+            const f = list.find(function(it) {
+              if (!it) return false;
+              if (it.id === targetId || String(it.id).toLowerCase() === targetId.toLowerCase()) return true;
+              if (it.link === targetId) return true;
+              if (('newsbangla-' + it.id) === targetId) return true;
+              if (getJsHash(it.link) === targetId || getJsHash(it.id) === targetId) return true;
+              return false;
+            });
             if (f) return f;
           }
+
           if (targetLink) {
-            const f = list.find(it => it && (it.link === targetLink || it.id === targetLink));
+            const f = list.find(function(it) {
+              if (!it) return false;
+              if (it.link === targetLink || it.id === targetLink) return true;
+              if (getJsHash(it.link) === targetLink || getJsHash(it.id) === targetLink) return true;
+              return false;
+            });
             if (f) return f;
           }
           return null;

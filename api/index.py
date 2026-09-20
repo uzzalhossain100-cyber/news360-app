@@ -742,14 +742,51 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     target_id = article_id.strip() if article_id else ""
     target_link = direct_link.strip() if direct_link else ""
 
+    import hashlib
+    def matches_item(it):
+        if not it: return False
+        it_id = str(it.get("id") or "").strip()
+        it_link = str(it.get("link") or "").strip()
+        
+        # Exact match
+        if target_id and (it_id == target_id or f"newsbangla-{it_id}" == target_id or f"custom_{it_id}" == target_id):
+            return True
+        if target_link and (it_link == target_link or it_id == target_link):
+            return True
+        if target_id and (it_link == target_id):
+            return True
+        
+        # 32-bit int hash match (same as JS implementation)
+        def js_hash(s):
+            h = 0
+            for c in s:
+                h = ((h << 5) - h) + ord(c)
+                h &= 0xFFFFFFFF
+                if h >= 0x80000000:
+                    h -= 0x100000000
+            return "nb_" + hex(abs(h))[2:]
+
+        if it_link and target_id == js_hash(it_link):
+            return True
+        if it_id and target_id == js_hash(it_id):
+            return True
+
+        # MD5 Hash match
+        if it_link:
+            h = "nb_" + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:10]
+            if target_id == h:
+                return True
+        if it_id:
+            h2 = "nb_" + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:10]
+            if target_id == h2:
+                return True
+        return False
+
     # 1. Search in Admin Persisted Articles
     try:
         admin_articles = read_persisted_admin_articles()
         for a in admin_articles:
-            if target_id and (a.get("id") == target_id or f"custom_{a.get('id')}" == target_id or a.get("id") == f"custom_{target_id}"):
-                found_item = a
-                break
-            if target_link and a.get("link") == target_link:
+            if matches_item(a):
                 found_item = a
                 break
     except Exception:
@@ -760,10 +797,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         try:
             catalog = load_pristine_catalog()
             for it in catalog:
-                if target_id and (it.get("id") == target_id or f"newsbangla-{it.get('id')}" == target_id or it.get("id") == f"newsbangla-{target_id}"):
-                    found_item = it
-                    break
-                if target_link and it.get("link") == target_link:
+                if matches_item(it):
                     found_item = it
                     break
         except Exception:
@@ -853,7 +887,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 </html>"""
     return HTMLResponse(content=html_content, status_code=200)
 
-@app.get("/article/{article_id}")
+@app.get("/article/{article_id:path}")
 def direct_article_share_endpoint(article_id: str):
     return render_social_share_page(article_id, None)
 
