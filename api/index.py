@@ -853,31 +853,38 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
     real_url = url
 
     # Decode Google News redirect if needed
-    decode_err = ""
     if 'news.google.com' in real_url:
         try:
             from googlenewsdecoder import new_decoderv1
             res = new_decoderv1(real_url)
             if res.get('status') and res.get('decoded_url'):
                 real_url = res['decoded_url']
-            else:
-                decode_err = f"Failed to decode: {res}"
-        except Exception as ex:
-            decode_err = f"Decoder exception: {ex}"
-# Select optimal header to bypass Cloudflare protection
-    if 'jugantor.com' in real_url:
-        headers = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
-    elif any(d in real_url for d in ['ittefaq.com.bd', 'bd-pratidin.com', 'kalerkantho.com']):
-        headers = {'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
-    elif any(d in real_url for d in ['prothomalo.com', 'bbc.com', 'channel24bd.tv', 'ntvbd.com', 'rtvonline.com', 'bangla.bdnews24.com']):
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-    else:
-        headers = {'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
+        except Exception:
+            pass
 
-    try:
-        req = urllib.request.Request(real_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            html_content = r.read().decode('utf-8', errors='ignore')
+    ua_list = [
+        'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    ]
+
+    html_content = ""
+    for ua in ua_list:
+        try:
+            req = urllib.request.Request(real_url, headers={
+                'User-Agent': ua,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8'
+            })
+            with urllib.request.urlopen(req, timeout=4) as r:
+                html_content = r.read().decode('utf-8', errors='ignore')
+                if html_content and len(html_content) > 500:
+                    break
+        except Exception:
+            continue
+
+    if html_content:
+        try:
             soup = BeautifulSoup(html_content, 'html.parser')
             
             # Title extraction
@@ -903,16 +910,14 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
                         image = src
                         break
 
-            # Strip script, style, comments, navigation, and advertisement wrappers
             for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript', 'button']):
                 tag.decompose()
 
-            # Target article body containers first if available
             article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I))
             search_scope = article_body if article_body else soup
 
             seen_paras = set()
-            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন']
+            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন', 'পড়তে ক্লিক করুন']
 
             for p in search_scope.find_all('p'):
                 txt = p.get_text(strip=True)
@@ -922,16 +927,13 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
                     if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
                         seen_paras.add(txt)
                         paras.append(txt)
-    except Exception as e:
-        import traceback
-        err_str = f"{type(e).__name__}: {e} -> {traceback.format_exc()}"
-        print("GET_ARTICLE ERROR:", err_str)
-        return {"title": title or title_hint or "", "image": image, "paragraphs": [], "debug_error": err_str, "decoded_url": real_url}
+        except Exception:
+            pass
 
     return {
         "title": title or title_hint or "",
         "image": image,
-        "paragraphs": paras[:35], "debug_url": real_url, "decode_err": decode_err
+        "paragraphs": paras[:35]
     }
 
 
