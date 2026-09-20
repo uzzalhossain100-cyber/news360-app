@@ -9295,11 +9295,12 @@ function selectSource(sourceId) {
         // Always re-integrate custom articles so admin news stays at the top!
         integrateCustomArticles();
 
-        // Sort: newest first (is_new items prioritized to stay at the top!)
+        // Strict Chronological Order:
+        // User Requirement: "যে খবরটি সবচেয়ে কম আগের সেটি প্রথমে আসবে তা যখনই লোড করা হোক না কেন? সিরিয়াল ঠিক রাখতে হবে।"
         allNewsItems.sort(function(a, b) {
-          if (a.is_new && !b.is_new) return -1;
-          if (!a.is_new && b.is_new) return 1;
-          return (b.timestamp || 0) - (a.timestamp || 0);
+          const tA = Number(a.published_at || a.timestamp || 0);
+          const tB = Number(b.published_at || b.timestamp || 0);
+          return tB - tA; // Newest / most recent publication time strictly first!
         });
 
         // Recalculate relative time dynamically for every item
@@ -9462,19 +9463,12 @@ function selectSource(sourceId) {
         items = items.filter(function(item) { return item.title.toLowerCase().indexOf(q) !== -1; });
       }
 
-      // Strict descending order: Admin published custom news and newest items first
+      // Strict Chronological Order across all displayed items:
+      // User Requirement: "যে খবরটি সবচেয়ে কম আগের সেটি প্রথমে আসবে তা যখনই লোড করা হোক না কেন? সিরিয়াল ঠিক রাখতে হবে।"
       items.sort(function(a, b) {
-        // Admin published custom news ALWAYS comes first at the very top, sorted newest to oldest
-        if (a.is_custom && !b.is_custom) return -1;
-        if (!a.is_custom && b.is_custom) return 1;
-        if (a.is_custom && b.is_custom) return (b.timestamp || 0) - (a.timestamp || 0);
-
-        // Then newly arrived items
-        if (a.is_new && !b.is_new) return -1;
-        if (!a.is_new && b.is_new) return 1;
-
-        // Then by timestamp descending
-        return (b.timestamp || 0) - (a.timestamp || 0);
+        const tA = Number(a.published_at || a.timestamp || 0);
+        const tB = Number(b.published_at || b.timestamp || 0);
+        return tB - tA; // Newest / least time ago strictly at position 1, 2, 3...
       });
 
       const badge = document.getElementById('newsCountBadge');

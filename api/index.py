@@ -895,8 +895,8 @@ def get_news(
         clean_news = cat_items
 
     
-    # Sort all news items by exact publication timestamp descending
-    news.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    # Strict chronological sorting: newest publication timestamp first
+    clean_news.sort(key=lambda x: (x.get("published_at") or x.get("timestamp") or 0), reverse=True)
 
     return {
         "status": "success",
