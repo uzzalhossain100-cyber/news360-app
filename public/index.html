@@ -10833,8 +10833,16 @@ function selectSource(sourceId) {
         return;
       }
 
-      togglePublishArticle(currentModalArticle.id);
-      closeModal();
+      const id = currentModalArticle.id;
+      togglePublishArticle(id);
+      const customArticles = getAdminCustomArticles();
+      const updatedItem = customArticles.find(a => a.id === id);
+      if (updatedItem) {
+        currentModalArticle = updatedItem;
+        openArticleModal(updatedItem);
+      } else {
+        closeModal();
+      }
     }
 
     function handleModalAdminDeleteClick() {
@@ -11046,6 +11054,15 @@ function openQuickEditModal(id) {
         renderAdminNewsList();
       }
       updateTicker();
+
+      // If edited from modal, automatically reopen the updated article so Admin sees the enabled Publish button!
+      if (!andPublish) {
+        setTimeout(function() {
+          openArticleModal(targetItem);
+        }, 300);
+      }
+      return;
+
     }
 
 function editCustomArticle(id) {
