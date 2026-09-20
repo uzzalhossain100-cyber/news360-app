@@ -1462,11 +1462,6 @@
           </svg>
           যোগাযোগ
         </button>
-        <!-- NewsBangla Special Admin Desk (Visible only when admin is logged in) -->
-        <button class="nav-tab-btn" id="tabNewsBangla" onclick="openNewsBanglaDesk()" style="display: none; background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); border-color: #be123c; color: #ffffff; font-weight: 700;">
-          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#ffffff;box-shadow:0 0 6px #fff;"></span>
-          NewsBangla ডেস্ক
-        </button>
         <!-- Admin Panel Menu Item (Shown right next to যোগাযোগ when admin is logged in) -->
         <button class="nav-tab-btn" id="tabAdmin" onclick="switchPage('admin')" style="display: none; background: #fff1f2; border-color: #fecdd3; color: #e11d48; font-weight: 700;">
           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1949,9 +1944,14 @@
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
           <div style="font-size: 17px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
             <svg width="20" height="20" fill="none" stroke="#e11d48" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-            প্রকাশিত সংবাদের তালিকা ও ব্যবস্থাপনা (<span id="adminTotalNewsCount">০</span>টি)
+            সংবাদের তালিকা ও ব্যবস্থাপনা (<span id="adminTotalNewsCount">০</span>টি)
           </div>
-          <span style="font-size: 12.5px; color: var(--text-muted);">হাইড বা ডিলিট করুন</span>
+          <!-- Admin Status Filter Buttons -->
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <button type="button" class="admin-panel-filter-btn" data-status="all" onclick="setAdminPanelStatusFilter('all')" style="background: #e11d48; color: white; border: none; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700; cursor: pointer;">সব (<span id="adminFilterCountAll">০</span>)</button>
+            <button type="button" class="admin-panel-filter-btn" data-status="published" onclick="setAdminPanelStatusFilter('published')" style="background: var(--bg-primary); color: #16a34a; border: 1px solid var(--border-color); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700; cursor: pointer;">✓ পাবলিশড (<span id="adminFilterCountPub">০</span>)</button>
+            <button type="button" class="admin-panel-filter-btn" data-status="unpublished" onclick="setAdminPanelStatusFilter('unpublished')" style="background: var(--bg-primary); color: #dc2626; border: 1px solid var(--border-color); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700; cursor: pointer;">✕ আনপাবলিশড (<span id="adminFilterCountUnpub">০</span>)</button>
+          </div>
         </div>
 
         <div id="adminNewsListContainer" style="display: flex; flex-direction: column; gap: 12px;">
@@ -11040,87 +11040,142 @@ function editCustomArticle(id) {
       showToast('✓ সংবাদটি সফলভাবে মুছে ফেলা হয়েছে');
     }
 
+    let currentAdminPanelStatusFilter = 'all';
+
+    function setAdminPanelStatusFilter(status) {
+      currentAdminPanelStatusFilter = status;
+      document.querySelectorAll('.admin-panel-filter-btn').forEach(function(btn) {
+        if (btn.getAttribute('data-status') === status) {
+          btn.style.background = status === 'published' ? '#16a34a' : (status === 'unpublished' ? '#dc2626' : '#e11d48');
+          btn.style.color = '#ffffff';
+          btn.style.border = 'none';
+        } else {
+          btn.style.background = 'var(--bg-primary)';
+          btn.style.color = btn.getAttribute('data-status') === 'published' ? '#16a34a' : (btn.getAttribute('data-status') === 'unpublished' ? '#dc2626' : 'var(--text-main)');
+          btn.style.border = '1px solid var(--border-color)';
+        }
+      });
+      renderAdminNewsList();
+    }
+
     function renderAdminNewsList() {
       const container = document.getElementById('adminNewsListContainer');
       const countSpan = document.getElementById('adminTotalNewsCount');
       if (!container) return;
 
       const customArticles = getAdminCustomArticles();
-      if (countSpan) countSpan.innerText = bnDigits(customArticles.length);
+      
+      const countAll = customArticles.length;
+      const countPub = customArticles.filter(a => a.published === true || (a.published_at && a.published_at > 0)).length;
+      const countUnpub = customArticles.filter(a => !a.published && !a.published_at).length;
 
-      if (customArticles.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding:30px 10px; color:var(--text-muted); font-size:14px;">এখনো কোনো নিজস্ব সংবাদ যোগ করা হয়নি। উপরের "নতুন খবর যোগ করুন" বাটনে ক্লিক করে সংবাদ প্রকাশ করুন।</div>';
+      if (countSpan) countSpan.innerText = bnDigits(countAll);
+      const elAll = document.getElementById('adminFilterCountAll');
+      const elPub = document.getElementById('adminFilterCountPub');
+      const elUnpub = document.getElementById('adminFilterCountUnpub');
+      if (elAll) elAll.innerText = bnDigits(countAll);
+      if (elPub) elPub.innerText = bnDigits(countPub);
+      if (elUnpub) elUnpub.innerText = bnDigits(countUnpub);
+
+      // Apply filter for the list
+      let filteredArticles = customArticles;
+      if (currentAdminPanelStatusFilter === 'published') {
+        filteredArticles = customArticles.filter(a => a.published === true || (a.published_at && a.published_at > 0));
+      } else if (currentAdminPanelStatusFilter === 'unpublished') {
+        filteredArticles = customArticles.filter(a => !a.published && !a.published_at);
+      }
+
+      if (filteredArticles.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:35px 10px; color:var(--text-muted); font-size:14px; background:var(--bg-primary); border-radius:12px; border:1px dashed var(--border-color);">' +
+          (currentAdminPanelStatusFilter === 'unpublished' ? 'কোনো আনপাবলিশড সংবাদ পাওয়া যায়নি।' : (currentAdminPanelStatusFilter === 'published' ? 'এখনো কোনো সংবাদ পাবলিশ করা হয়নি।' : 'এখনো কোনো সংবাদ যোগ করা হয়নি।')) +
+        '</div>';
         return;
       }
 
-      let html = '';
-      customArticles.forEach(function(item) {
+      container.innerHTML = '';
+      filteredArticles.forEach(function(item) {
         const isHidden = !!item.hidden;
-        const isPub = !!item.published;
+        const isPub = item.published === true || (item.published_at && item.published_at > 0);
         const catName = CATEGORY_NAMES[item.category] || item.category;
         const effectiveTs = item.published_at || item.timestamp;
         const timeAgoText = calculateTimeAgo(effectiveTs);
         const pubDateStr = new Date((effectiveTs || Math.floor(Date.now()/1000)) * 1000).toLocaleString('bn-BD');
 
-        html += '<div style="background:var(--bg-card); border:1.5px solid var(--border-color); border-radius:14px; padding:16px 18px; display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; box-shadow:0 2px 8px rgba(0,0,0,0.03);' + (isHidden ? 'opacity:0.6;' : '') + '">';
-        html += '  <div style="display:flex; gap:14px; align-items:center; flex:1; min-width:260px;">';
+        const cardRow = document.createElement('div');
+        cardRow.style.cssText = 'background:var(--bg-card); border:1.5px solid var(--border-color); border-radius:14px; padding:16px 18px; display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; box-shadow:0 2px 8px rgba(0,0,0,0.03);' + (isHidden ? 'opacity:0.6;' : '');
+
+        const leftDiv = document.createElement('div');
+        leftDiv.style.cssText = 'display:flex; gap:14px; align-items:center; flex:1; min-width:260px;';
+        
+        let imgHtml = '';
         if (item.image) {
-          html += '    <img src="' + item.image + '" style="width:78px; height:58px; border-radius:10px; object-fit:cover; flex-shrink:0; border:1px solid var(--border-color);">';
+          imgHtml = '<img src="' + item.image + '" style="width:78px; height:58px; border-radius:10px; object-fit:cover; flex-shrink:0; border:1px solid var(--border-color);">';
         }
-        html += '    <div>';
-        html += '      <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">';
-        if (isPub) {
-          html += '        <span style="background:#dcfce7; color:#15803d; font-size:11.5px; font-weight:800; padding:3px 9px; border-radius:20px; display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#16a34a; box-shadow:0 0 6px #16a34a;"></span>পাবলিশড (সকল পাঠক দেখছেন)</span>';
-        } else {
-          html += '        <span style="background:#fee2e2; color:#b91c1c; font-size:11.5px; font-weight:800; padding:3px 9px; border-radius:20px; display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#dc2626;"></span>আনপাবলিশড (শুধুমাত্র এডমিন দেখছেন)</span>';
-        }
-        if (isHidden) {
-          html += '        <span style="background:#fef3c7; color:#b45309; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:20px;">হাইড করা</span>';
-        }
-        html += '      </div>';
-        html += '      <div style="font-size:15px; font-weight:700; color:var(--text-main); line-height:1.4; margin-bottom:5px;">' + item.title + '</div>';
-        html += '      <div style="font-size:12.5px; color:var(--text-muted); display:flex; gap:12px; flex-wrap:wrap;">';
-        html += '        <span>উৎস: <strong>' + item.source_name + '</strong></span>';
-        html += '        <span>বিভাগ: <strong>' + catName + '</strong></span>';
-        html += '        <span>সময়: <strong style="color:var(--text-main);">' + timeAgoText + '</strong> (' + pubDateStr + ')</span>';
-        html += '      </div>';
-        html += '    </div>';
-        html += '  </div>';
 
-        html += '  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
+        leftDiv.innerHTML = imgHtml +
+          '<div>' +
+            '<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">' +
+              (isPub 
+                ? '<span style="background:#dcfce7; color:#15803d; font-size:11.5px; font-weight:800; padding:3px 9px; border-radius:20px; display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#16a34a; box-shadow:0 0 6px #16a34a;"></span>পাবলিশড (সকল পাঠক দেখছেন)</span>'
+                : '<span style="background:#fee2e2; color:#b91c1c; font-size:11.5px; font-weight:800; padding:3px 9px; border-radius:20px; display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#dc2626;"></span>আনপাবলিশড (শুধুমাত্র এডমিন)</span>') +
+              (isHidden ? '<span style="background:#fef3c7; color:#b45309; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:20px;">হাইড করা</span>' : '') +
+            '</div>' +
+            '<div style="font-size:15px; font-weight:700; color:var(--text-main); line-height:1.4; margin-bottom:5px;">' + item.title + '</div>' +
+            '<div style="font-size:12.5px; color:var(--text-muted); display:flex; gap:12px; flex-wrap:wrap;">' +
+              '<span>উৎস: <strong>' + item.source_name + '</strong></span>' +
+              '<span>বিভাগ: <strong>' + catName + '</strong></span>' +
+              '<span>সময়: <strong style="color:var(--text-main);">' + timeAgoText + '</strong> (' + pubDateStr + ')</span>' +
+            '</div>' +
+          '</div>';
+
+        const rightDiv = document.createElement('div');
+        rightDiv.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
+
         // 1. Publish / Unpublish Button
-        if (isPub) {
-          html += '    <button onclick="togglePublishArticle(\'' + item.id + '\')" style="background:#475569; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px;" title="খবরটি সাধারণ পাঠকের থেকে লুকান"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg> আনপাবলিশ</button>';
-        } else {
-          html += '    <button onclick="togglePublishArticle(\'' + item.id + '\')" style="background:linear-gradient(135deg, #16a34a, #15803d); color:white; border:none; border-radius:8px; padding:7px 16px; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 3px 8px rgba(22,163,74,0.3);" title="খবরটি সবার জন্য প্রকাশ করুন"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg> পাবলিশ করুন</button>';
-        }
-        // 2. Edit Button
-        html += '    <button onclick="openQuickEditModal(\'' + item.id + '\')" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> এডিট</button>';
-        // 3. Delete Button
-        html += '    <button onclick="deleteCustomArticle(\'' + item.id + '\')" style="background:#dc2626; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> ডিলিট</button>';
-        html += '  </div>';
-        html += '</div>';
-      });
+        const pubBtn = document.createElement('button');
+        pubBtn.type = 'button';
+        pubBtn.style.cssText = isPub 
+          ? 'background:#475569; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px;'
+          : 'background:linear-gradient(135deg, #16a34a, #15803d); color:white; border:none; border-radius:8px; padding:7px 16px; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 3px 8px rgba(22,163,74,0.3);';
+        pubBtn.innerHTML = isPub 
+          ? '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg> আনপাবলিশ'
+          : '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg> পাবলিশ করুন';
+        pubBtn.onclick = function() { togglePublishArticle(item.id); };
 
-      container.innerHTML = html;
+        // 2. Edit Button - Directly calls populateAndOpenEditModalWithItem(item)
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.style.cssText = 'background:#2563eb; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; box-shadow:0 2px 6px rgba(37,99,235,0.25);';
+        editBtn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> এডিট';
+        editBtn.onclick = function() { populateAndOpenEditModalWithItem(item); };
+
+        // 3. Delete Button
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.style.cssText = 'background:#dc2626; color:white; border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;';
+        delBtn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> ডিলিট';
+        delBtn.onclick = function() { deleteCustomArticle(item.id); };
+
+        rightDiv.appendChild(pubBtn);
+        rightDiv.appendChild(editBtn);
+        rightDiv.appendChild(delBtn);
+
+        cardRow.appendChild(leftDiv);
+        cardRow.appendChild(rightDiv);
+        container.appendChild(cardRow);
+      });
     }
 
     function integrateCustomArticles() {
       const nowSec = Math.floor(Date.now() / 1000);
       const customArticles = getAdminCustomArticles();
-      const isAdmin = isAdminLoggedIn();
 
-      // "NewsBangla পেজ শুধুমাত্র এডমিন লগিন করে দেখতে পাবেন, এখানে সকল খবর আনপাবলিশ অবস্থায় থাকবে
-      // এবং এডিটিং, ডিলিট ও পাবলিশ বাটন থাকবে। যদি এডমিন পাবলিশ করে তবেই সেই খবর সবাই দেখতে পাবেন।
-      // অন্যথায় শুধু এডমিন সেই খবর দেখতে পাবেন। আর প্রতিটি খবর কোন সময় পাবলিশ হয়েছে সেখান থেকে খবরের সময় কাউন্ট করতে হবে।"
+      // Strict User Requirement:
+      // "সকল সংবাদ পেজে এডমিন ক্লিক করলে আনপাবলিশ খবরগুলোও দেখায় যা দেখাবে না। আনপাবলিশ খবর শুধু এডমিন প্যানেলে প্রকাশিত সংবাদের তালিকা ও ব্যবস্থাপনায় দেখতে পাবেন।"
+      // Therefore, in public feeds (allNewsItems), ONLY strictly published articles are integrated!
       const activeCustom = customArticles.filter(function(it) {
         if (it.hidden) return false;
-        // If not admin, only show articles that have been explicitly published
-        if (!isAdmin) {
-          return it.published === true || (it.published_at && it.published_at > 0);
-        }
-        // If admin is logged in, show both published and unpublished articles
-        return true;
+        return it.published === true || (it.published_at && it.published_at > 0);
       });
 
       // Sort activeCustom: newest published_at / timestamp first
@@ -11132,7 +11187,6 @@ function editCustomArticle(id) {
 
       // Register article details into INITIAL_ARTICLES_DATA for full news reader modal
       activeCustom.forEach(function(it) {
-        // Calculate dynamic time from the exact published_at timestamp
         const effectiveTime = it.published_at || it.timestamp;
         if (effectiveTime) {
           it.time_ago = calculateTimeAgo(effectiveTime);
@@ -11148,7 +11202,6 @@ function editCustomArticle(id) {
         }
       });
 
-      // Always prepend active custom articles so admin news appears at the very beginning
       const existingNonCustom = allNewsItems.filter(it => !it.is_custom);
       allNewsItems = activeCustom.concat(existingNonCustom);
     }
@@ -11257,7 +11310,7 @@ function editCustomArticle(id) {
         <button type="button" onclick="confirmDeleteArticleExecute()" style="flex: 1; padding: 11px 16px; border-radius: 12px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);">হ্যাঁ, ডিলিট করুন</button>
       </div>
   <!-- Standalone Quick Edit News Modal for NewsBangla & Admin -->
-  <div id="quickEditNewsModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 2147483647; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;">
+  <div id="quickEditNewsModal" onclick="if(event.target===this)closeQuickEditModal();" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 2147483647; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;">
     <div style="background: var(--bg-card, #ffffff); border-radius: 18px; max-width: 650px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 1px solid var(--border-color, #e2e8f0); position: relative; margin: auto;">
       
       <!-- Modal Header -->
