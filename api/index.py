@@ -424,6 +424,79 @@ def fetch_bdnews24_live(now_ts):
     return items
 
 
+
+CATEGORY_KEYWORDS = {
+    'sports': 'খেলা OR ক্রিকেট OR ফুটবল OR মেসি OR রোনালদো OR বিশ্বকাপ OR ম্যাচ',
+    'entertainment': 'বিনোদন OR সিনেমা OR নাটক OR তারকা OR ওটিটি OR গান OR বলিউড OR ঢালিউড',
+    'economy': 'অর্থনীতি OR বাণিজ্য OR পুঁজিবাজার OR ডলার OR ব্যাংক OR বাজেট OR রেমিট্যান্স',
+    'tech': 'প্রযুক্তি OR স্মার্টফোন OR আইফোন OR এআই OR বিজ্ঞান OR ইন্টারনেট OR গ্যাজেট',
+    'international': 'আন্তর্জাতিক OR বিশ্ব OR যুদ্ধ OR জাতিসংঘ OR যুক্তরাষ্ট্র OR মধ্যপ্রাচ্য',
+    'national': 'বাংলাদেশ OR ঢাকা OR চট্টগ্রাম OR আদালত OR পুলিশ OR নির্বাচন OR সরকার'
+}
+
+PAPER_DOMAINS = {
+    'prothomalo': ('prothomalo.com', 'প্রথম আলো', 'Prothom Alo', '#e11d48'),
+    'bbc': ('bbc.com/bengali', 'বিবিসি বাংলা', 'BBC Bangla', '#dc2626'),
+    'ittefaq': ('ittefaq.com.bd', 'দৈনিক ইত্তেফাক', 'Ittefaq', '#2563eb'),
+    'bdpratidin': ('bd-pratidin.com', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a'),
+    'kalerkantho': ('kalerkantho.com', 'কালের কণ্ঠ', 'Kaler Kantho', '#d97706'),
+    'jugantor': ('jugantor.com', 'দৈনিক যুগান্তর', 'Jugantor', '#e11d48'),
+    'bdnews24': ('bangla.bdnews24.com', 'বিডিনিউজ টোয়েন্টিফোর', 'BDNews24', '#7c3aed')
+}
+
+def fetch_targeted_category_news(target_category, target_source=None, limit=50):
+    items = []
+    kw = CATEGORY_KEYWORDS.get(target_category, '')
+    if not kw: return items
+
+    papers = []
+    if target_source and target_source != 'all' and target_source in PAPER_DOMAINS:
+        papers = [(target_source, *PAPER_DOMAINS[target_source])]
+    else:
+        papers = [(k, *v) for k, v in PAPER_DOMAINS.items()]
+
+    now_ts = time.time()
+    for pid, domain, pname, pbadge, pcolor in papers:
+        query = f"site:{domain} ({kw})"
+        url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=bn&gl=BD&ceid=BD:bn"
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=3.5) as r:
+                root = ET.fromstring(r.read())
+                for it in root.findall('.//item')[:15]:
+                    title_elem = it.find('title')
+                    link_elem = it.find('link')
+                    if title_elem is None or not title_elem.text: continue
+                    t = title_elem.text.strip()
+                    # Clean title: Google news titles usually end with " - Newspaper"
+                    t = re.sub(r'\s*-\s*[^ -]+$', '', t).strip()
+                    l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
+                    if not is_clean_headline(t, l): continue
+
+                    # High quality fallback brand image
+                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+                    if pid in ['sports', 'entertainment']:
+                        img = 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80'
+
+                    items.append({
+                        "id": l,
+                        "title": t,
+                        "link": l,
+                        "timestamp": now_ts,
+                        "category": target_category,
+                        "source_id": pid,
+                        "source_name": pname,
+                        "source_badge": pbadge,
+                        "source_color": pcolor,
+                        "image": img
+                    })
+                    if len(items) >= limit: break
+        except Exception:
+            pass
+        if len(items) >= limit: break
+    return items
+
+
 @app.get("/api/news")
 def get_news(
     category: Optional[str] = Query(None),
@@ -485,9 +558,30 @@ def get_news(
         seen.add(l)
         clean_news.append(item)
 
-    # Filter by category if requested
+    # If a specific category was requested (or if specific category has low items)
     if category and category != 'all':
-        clean_news = [n for n in clean_news if n.get('category') == category]
+        cat_items = [n for n in clean_news if n.get('category') == category]
+        # If fewer than 15 items in this category, actively fetch live category news from target newspaper(s)
+        if len(cat_items) < 15:
+            extra_cat_items = fetch_targeted_category_news(category, source, limit=40)
+            seen_links = set(n.get('link') for n in cat_items)
+            for e_it in extra_cat_items:
+                if e_it['link'] not in seen_links:
+                    seen_links.add(e_it['link'])
+                    cat_items.append(e_it)
+        clean_news = cat_items
+    else:
+        # When refreshing ALL categories ("সকল বিভাগে ও সকল পত্রিকায় গিয়ে রিফ্রেশ দিলে সকল খবর রিফ্রেশ হয়ে সকল বিভাগে নতুন খবর যোগ করবে")
+        # Ensure every single category has a rich pool of fresh articles!
+        for c in ['sports', 'entertainment', 'economy', 'tech']:
+            c_count = len([n for n in clean_news if n.get('category') == c])
+            if c_count < 8:
+                extra = fetch_targeted_category_news(c, source, limit=12)
+                seen_links = set(n.get('link') for n in clean_news)
+                for e_it in extra:
+                    if e_it['link'] not in seen_links:
+                        seen_links.add(e_it['link'])
+                        clean_news.append(e_it)
 
     return {
         "status": "success",
