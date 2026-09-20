@@ -578,30 +578,24 @@ def get_news(
         seen.add(l)
         clean_news.append(item)
 
-    # If a specific category was requested (or if specific category has low items)
+    # If a specific category was requested, filter directly from clean_news or pristine cache
     if category and category != 'all':
         cat_items = [n for n in clean_news if n.get('category') == category]
-        # If fewer than 15 items in this category, actively fetch live category news from target newspaper(s)
-        if len(cat_items) < 15:
-            extra_cat_items = fetch_targeted_category_news(category, source, limit=40)
-            seen_links = set(n.get('link') for n in cat_items)
-            for e_it in extra_cat_items:
-                if e_it['link'] not in seen_links:
-                    seen_links.add(e_it['link'])
-                    cat_items.append(e_it)
+        if len(cat_items) < 10:
+            try:
+                local_json_path = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
+                if os.path.exists(local_json_path):
+                    with open(local_json_path, "r", encoding="utf-8") as f:
+                        local_items = json.load(f)
+                        seen_links = set(n.get('link') for n in cat_items)
+                        for it in local_items:
+                            if it.get('category') == category:
+                                if (not source or source == 'all' or it.get('source_id') == source) and it.get('link') not in seen_links:
+                                    seen_links.add(it.get('link'))
+                                    cat_items.append(it)
+            except Exception:
+                pass
         clean_news = cat_items
-    else:
-        # When refreshing ALL categories ("সকল বিভাগে ও সকল পত্রিকায় গিয়ে রিফ্রেশ দিলে সকল খবর রিফ্রেশ হয়ে সকল বিভাগে নতুন খবর যোগ করবে")
-        # Ensure every single category has a rich pool of fresh articles!
-        for c in ['sports', 'entertainment', 'economy', 'tech']:
-            c_count = len([n for n in clean_news if n.get('category') == c])
-            if c_count < 8:
-                extra = fetch_targeted_category_news(c, source, limit=12)
-                seen_links = set(n.get('link') for n in clean_news)
-                for e_it in extra:
-                    if e_it['link'] not in seen_links:
-                        seen_links.add(e_it['link'])
-                        clean_news.append(e_it)
 
     return {
         "status": "success",

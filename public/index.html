@@ -9007,22 +9007,15 @@
         console.warn('Backend live fetch err:', err);
       }
 
-      // 2. Fallback to direct RSS feeds only if backend completely unreachable and only if items have real images
-      if (freshItems.length === 0) {
-        try {
-          const direct = await fetchDirectRssFeeds();
-          if (direct && direct.length > 0) {
-            const validWithImages = direct.filter(it => it.image && !it.image.includes('unsplash.com'));
-            if (validWithImages.length > 0) {
-              if (targetCategory && targetCategory !== 'all') {
-                freshItems = validWithImages.filter(it => it.category === targetCategory);
-              } else {
-                freshItems = validWithImages;
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Direct RSS err:', e);
+      // 2. If network completely unavailable, fallback to embedded pristine initial data
+      if (freshItems.length === 0 && typeof INITIAL_NEWS_DATA !== 'undefined' && Array.isArray(INITIAL_NEWS_DATA)) {
+        if (targetCategory && targetCategory !== 'all') {
+          freshItems = INITIAL_NEWS_DATA.filter(it => it.category === targetCategory);
+        } else {
+          freshItems = INITIAL_NEWS_DATA;
+        }
+        if (targetSource && targetSource !== 'all') {
+          freshItems = freshItems.filter(it => it.source_id === targetSource);
         }
       }
 
