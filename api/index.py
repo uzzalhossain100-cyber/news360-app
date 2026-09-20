@@ -903,7 +903,7 @@ def get_news(
         # Run all scrapers concurrently with a strict 4.5s overall timeout
         with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
             future_to_source = {executor.submit(fn, now_ts): s_id for s_id, fn in fetch_map.items()}
-            done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=5.0)
+            done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=3.2)
             for future in done:
                 try:
                     res_items = future.result()
