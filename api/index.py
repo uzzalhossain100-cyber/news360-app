@@ -737,7 +737,7 @@ def get_news(
 # SOCIAL MEDIA SHARE PREVIEW ENDPOINT (Facebook, WhatsApp, Messenger, Twitter)
 # Generates dynamic OpenGraph tags with the real article headline and thumbnail image
 # ---------------------------------------------------------------------------
-def render_social_share_page(article_id: str, direct_link: Optional[str] = None):
+def render_social_share_page(article_id: str, direct_link: Optional[str] = None, user_agent: str = ""):
     found_item = None
     target_id = article_id.strip() if article_id else ""
     target_link = direct_link.strip() if direct_link else ""
@@ -746,7 +746,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
     try:
         admin_articles = read_persisted_admin_articles()
         for a in admin_articles:
-            if target_id and a.get("id") == target_id:
+            if target_id and (a.get("id") == target_id or f"custom_{a.get('id')}" == target_id or a.get("id") == f"custom_{target_id}"):
                 found_item = a
                 break
             if target_link and a.get("link") == target_link:
@@ -760,7 +760,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
         try:
             catalog = load_pristine_catalog()
             for it in catalog:
-                if target_id and (it.get("id") == target_id or f"newsbangla-{it.get('id')}" == target_id):
+                if target_id and (it.get("id") == target_id or f"newsbangla-{it.get('id')}" == target_id or it.get("id") == f"newsbangla-{target_id}"):
                     found_item = it
                     break
                 if target_link and it.get("link") == target_link:
@@ -774,7 +774,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
         raw_title = found_item.get("title", "তাজা সংবাদ - NewsBangla")
         title = re.sub(r'\s*[-–|].*$', '', raw_title).strip()
         paras = found_item.get("paragraphs", [])
-        desc = paras[0][:200] if paras else f"{title} সম্পর্কে বিস্তারিত পড়ুন NewsBangla-তে।"
+        desc = paras[0][:220] if paras else f"{title} সম্পর্কে বিস্তারিত খবর ও আপডেট পড়ুন NewsBangla-তে।"
         raw_image = found_item.get("image") or ""
         
         # If image is base64 data URI, route through /api/article-image/{id}
@@ -797,9 +797,24 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
     escaped_desc = html.escape(desc)
     escaped_image = html.escape(image)
 
-    # Universal OpenGraph HTML page:
-    # 1. Social bots (Facebook, WhatsApp, Messenger) read OpenGraph & Twitter Card tags
-    # 2. Human visitors are immediately redirected via JS window.location.replace and meta-refresh
+    # Check if visitor is a social media preview crawler bot
+    ua_lower = (user_agent or "").lower()
+    is_crawler = any(bot in ua_lower for bot in [
+        "facebookexternalhit", "facebot", "facebook", "whatsapp", "meta-externalagent",
+        "twitterbot", "telegrambot", "linkedinbot", "slackbot", "skypeuripreview",
+        "bingbot", "googlebot", "applebot", "discordbot"
+    ])
+
+    redirect_script = ""
+    if not is_crawler:
+        # For actual human users: instantly navigate to main app and open the article modal!
+        redirect_script = f"""
+    <meta http-equiv="refresh" content="0;url={app_redirect_url}">
+    <script>
+        window.location.replace("{app_redirect_url}");
+    </script>
+"""
+
     html_content = f"""<!DOCTYPE html>
 <html lang="bn" prefix="og: http://ogp.me/ns#">
 <head>
@@ -825,12 +840,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
     <meta name="twitter:title" content="{escaped_title}">
     <meta name="twitter:description" content="{escaped_desc}">
     <meta name="twitter:image" content="{escaped_image}">
-
-    <!-- Instant client redirect to full article in app/web -->
-    <meta http-equiv="refresh" content="0;url={app_redirect_url}">
-    <script>
-        window.location.replace("{app_redirect_url}");
-    </script>
+    {redirect_script}
 </head>
 <body style="font-family:'Hind Siliguri', -apple-system, sans-serif; background:#f8fafc; color:#0f172a; padding:40px 20px; text-align:center;">
     <div style="max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
@@ -841,11 +851,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None)
     </div>
 </body>
 </html>"""
-    return Response(content=html_content, media_type="text/html; charset=utf-8")
-
-@app.get("/api/share")
-def share_article_endpoint(article: Optional[str] = Query(None), link: Optional[str] = Query(None)):
-    return render_social_share_page(article or "", link or "")
+    return HTMLResponse(content=html_content, status_code=200)
 
 @app.get("/article/{article_id}")
 def direct_article_share_endpoint(article_id: str):
