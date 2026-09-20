@@ -1580,6 +1580,23 @@
       </div>
     </div>
 
+    <!-- NewsBangla Admin Status Filter Bar (শুধুমাত্র NewsBangla পেজে এবং এডমিন লগিন থাকলে দৃশ্যমান হবে) -->
+    <div id="newsbanglaAdminFilterBar" style="display: none; background: var(--bg-card, #ffffff); border: 1.5px solid var(--border-color, #e2e8f0); border-radius: 12px; padding: 10px 14px; margin-bottom: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 13px; font-weight: 800; color: #e11d48; display: inline-flex; align-items: center; gap: 5px;">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #e11d48;"></span>
+          NewsBangla এডমিন ফিল্টার:
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button type="button" class="nb-status-filter-btn active" data-status="all" onclick="setNewsBanglaAdminStatusFilter('all')" style="border: 1px solid var(--border-color, #cbd5e1); background: #e11d48; color: white; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">সব খবর (<span id="nbCountAll">০</span>)</button>
+        <button type="button" class="nb-status-filter-btn" data-status="published" onclick="setNewsBanglaAdminStatusFilter('published')" style="border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: #16a34a; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">✓ পাবলিশড (<span id="nbCountPub">০</span>)</button>
+        <button type="button" class="nb-status-filter-btn" data-status="unpublished" onclick="setNewsBanglaAdminStatusFilter('unpublished')" style="border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-primary, #f1f5f9); color: #dc2626; border-radius: 20px; padding: 5px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;">✕ আনপাবলিশড (<span id="nbCountUnpub">০</span>)</button>
+        <button type="button" onclick="autoCurateNewsForNewsBanglaDesk()" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 20px; padding: 5px 13px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="অন্যান্য পত্রিকা থেকে আরও খবর সংগ্রহ করুন">🔄 আরও খবর আনুন</button>
+      </div>
+    </div>
+
+
     <!-- News Grid Cards -->
     <div class="news-grid" id="newsGrid"></div>
 
@@ -8842,6 +8859,26 @@
       }
     }
 
+
+    // NewsBangla Admin Status Filter State ('all' | 'published' | 'unpublished')
+    let currentNewsBanglaAdminStatusFilter = 'all';
+
+    function setNewsBanglaAdminStatusFilter(status) {
+      currentNewsBanglaAdminStatusFilter = status;
+      document.querySelectorAll('.nb-status-filter-btn').forEach(function(btn) {
+        if (btn.getAttribute('data-status') === status) {
+          btn.style.background = status === 'published' ? '#16a34a' : (status === 'unpublished' ? '#dc2626' : '#e11d48');
+          btn.style.color = '#ffffff';
+          btn.style.border = 'none';
+        } else {
+          btn.style.background = 'var(--bg-primary, #f1f5f9)';
+          btn.style.color = btn.getAttribute('data-status') === 'published' ? '#16a34a' : (btn.getAttribute('data-status') === 'unpublished' ? '#dc2626' : '#0f172a');
+          btn.style.border = '1px solid var(--border-color, #cbd5e1)';
+        }
+      });
+      renderNewsGrid();
+    }
+
 function selectSource(sourceId) {
       // NewsBangla Requirement:
       // "NewsBangla পেজে সাধারণ ইউজার প্রবেশ করলে বা ক্লিক করলে যে খবর এডমিন কর্তৃক পাবলিশ হয়েছে শুধুমাত্র সেগুলো দেখতে পাবেন। তাই সাধারণ ইউজার NewsBangla পেজে প্রবেশ করতে পারবেন, যদি কোন খবর পাবলিশ করা না হয়ে থাকে তবে খালি পেজ দেখাবে।"
@@ -9333,6 +9370,34 @@ function selectSource(sourceId) {
         items = items.filter(function(item) { return item.source_id === currentSource; });
       }
 
+      // Handle NewsBangla Admin Status Filter & Filter Bar display
+      const nbFilterBar = document.getElementById('newsbanglaAdminFilterBar');
+      if (currentSource === 'newsbangla' && isAdmin) {
+        if (nbFilterBar) nbFilterBar.style.display = 'flex';
+        
+        // Count all, published and unpublished
+        const allNBItems = allNewsItems.filter(it => it.source_id === 'newsbangla' && !it.hidden);
+        const countAll = allNBItems.length;
+        const countPub = allNBItems.filter(it => it.published === true || (it.published_at && it.published_at > 0)).length;
+        const countUnpub = allNBItems.filter(it => !it.published && !it.published_at).length;
+
+        const elAll = document.getElementById('nbCountAll');
+        const elPub = document.getElementById('nbCountPub');
+        const elUnpub = document.getElementById('nbCountUnpub');
+        if (elAll) elAll.innerText = bnDigits(countAll);
+        if (elPub) elPub.innerText = bnDigits(countPub);
+        if (elUnpub) elUnpub.innerText = bnDigits(countUnpub);
+
+        // Filter based on admin status toggle:
+        if (currentNewsBanglaAdminStatusFilter === 'published') {
+          items = items.filter(it => it.published === true || (it.published_at && it.published_at > 0));
+        } else if (currentNewsBanglaAdminStatusFilter === 'unpublished') {
+          items = items.filter(it => !it.published && !it.published_at);
+        }
+      } else {
+        if (nbFilterBar) nbFilterBar.style.display = 'none';
+      }
+
       // Filter by category
       if (currentCategory !== 'all') {
         items = items.filter(function(item) { return item.category === currentCategory; });
@@ -9416,8 +9481,9 @@ function selectSource(sourceId) {
 
         // Check if admin is logged in and item is an editable/manageable custom/NewsBangla item
         let adminActionStrip = '';
-        if (isAdmin && (item.is_custom || item.source_id === 'newsbangla')) {
+        if (isAdmin && currentSource === 'newsbangla') {
           const isPub = !!item.published;
+          const safeId = encodeURIComponent(item.id || '');
           adminActionStrip = 
             '<div style="background:' + (isPub ? '#f0fdf4' : '#fef2f2') + '; border-top:1px dashed ' + (isPub ? '#bbf7d0' : '#fecaca') + '; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">' +
               '<div style="display:flex; align-items:center; gap:5px;">' +
@@ -9427,15 +9493,14 @@ function selectSource(sourceId) {
               '</div>' +
               '<div style="display:flex; align-items:center; gap:5px;">' +
                 (isPub 
-                  ? '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); togglePublishArticle(\'' + item.id + '\')" style="background:#475569; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer;" title="আনপাবলিশ করুন">আনপাবলিশ</button>'
-                  : '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); togglePublishArticle(\'' + item.id + '\')" style="background:#16a34a; color:white; border:none; border-radius:5px; padding:3px 9px; font-size:11px; font-weight:700; cursor:pointer;" title="পাবলিশ করুন">পাবলিশ</button>') +
-                '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); openQuickEditModal(\'' + item.id + '\');" style="background:#2563eb; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer;">এডিট</button>' +
-                '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); deleteCustomArticle(\'' + item.id + '\')" style="background:#dc2626; color:white; border:none; border-radius:5px; padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer;">ডিলিট</button>' +
+                  ? '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); togglePublishArticle(decodeURIComponent(\'' + safeId + '\'))" style="background:#475569; color:white; border:none; border-radius:5px; padding:4px 9px; font-size:11.5px; font-weight:700; cursor:pointer;" title="আনপাবলিশ করুন">আনপাবলিশ</button>'
+                  : '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); togglePublishArticle(decodeURIComponent(\'' + safeId + '\'))" style="background:#16a34a; color:white; border:none; border-radius:5px; padding:4px 10px; font-size:11.5px; font-weight:700; cursor:pointer;" title="পাবলিশ করুন">পাবলিশ</button>') +
+                '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); openQuickEditModal(decodeURIComponent(\'' + safeId + '\'))" style="background:#2563eb; color:white; border:none; border-radius:5px; padding:4px 10px; font-size:11.5px; font-weight:700; cursor:pointer;">এডিট</button>' +
+                '<button type="button" class="card-admin-action-btn" onclick="event.stopPropagation(); deleteCustomArticle(decodeURIComponent(\'' + safeId + '\'))" style="background:#dc2626; color:white; border:none; border-radius:5px; padding:4px 9px; font-size:11.5px; font-weight:600; cursor:pointer;">ডিলিট</button>' +
               '</div>' +
             '</div>';
         }
-
-        card.innerHTML = 
+card.innerHTML = 
           imgHtml +
           '<div class="card-top-accent" style="background:' + sourceColor + ';"></div>' +
           '<div class="card-body">' +
@@ -10622,24 +10687,38 @@ function selectSource(sourceId) {
     let quickEditUploadedBase64 = '';
 
     function openQuickEditModal(id) {
+      if (!id) return;
       const customArticles = getAdminCustomArticles();
-      let item = customArticles.find(a => a.id === id);
+      let item = customArticles.find(a => a.id === id || a.link === id);
 
-      // If not in customArticles yet (e.g. from allNewsItems), create editable reference
       if (!item) {
-        item = allNewsItems.find(a => a.id === id || a.id === ('newsbangla-' + id));
+        item = allNewsItems.find(a => a.id === id || a.link === id || a.id === ('newsbangla-' + id) || a.id === ('nb-' + id));
       }
-      if (!item) return;
+      
+      if (!item) {
+        // Fallback: search by id loosely
+        item = allNewsItems.find(a => String(a.id).indexOf(String(id)) !== -1);
+      }
+
+      if (!item) {
+        alert('খবরের তথ্য খুঁজে পাওয়া যায়নি। অনুগ্রহ করে পেজটি একবার রিফ্রেশ করুন।');
+        return;
+      }
+
+      const modal = document.getElementById('quickEditNewsModal');
+      if (!modal) return;
 
       document.getElementById('quickEditArticleId').value = item.id;
       document.getElementById('quickEditTitle').value = item.title || '';
       document.getElementById('quickEditSource').value = item.source_name || 'NewsBangla';
       document.getElementById('quickEditCategory').value = item.category || 'national';
       
-      const paragraphs = item.paragraphs || [item.title || ''];
+      const paragraphs = Array.isArray(item.paragraphs) && item.paragraphs.length > 0 
+        ? item.paragraphs 
+        : [item.title || ''];
       document.getElementById('quickEditContent').value = paragraphs.join('\n\n');
 
-      // Set datetime
+      // Set datetime input
       const effectiveTs = item.published_at || item.timestamp || Math.floor(Date.now() / 1000);
       const dt = new Date(effectiveTs * 1000);
       dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
@@ -10655,18 +10734,18 @@ function selectSource(sourceId) {
         imgPreview.src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&auto=format&fit=crop&q=80';
       }
 
-      // Show modal
-      const modal = document.getElementById('quickEditNewsModal');
-      if (modal) {
-        modal.style.display = 'flex';
-      }
+      // Show modal on top of everything
+      modal.style.setProperty('display', 'flex', 'important');
+      modal.style.zIndex = '2147483647';
+      document.body.style.overflow = 'hidden';
     }
 
     function closeQuickEditModal() {
       const modal = document.getElementById('quickEditNewsModal');
       if (modal) {
-        modal.style.display = 'none';
+        modal.style.setProperty('display', 'none', 'important');
       }
+      document.body.style.overflow = '';
     }
 
     function handleQuickEditImageUpload(e) {
