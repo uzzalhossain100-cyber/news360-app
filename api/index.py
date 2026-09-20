@@ -79,18 +79,19 @@ def detect_cat(title, url=""):
     return 'national'
 
 
+
 headers_social = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
 def fetch_prothomalo_live(now_ts):
     items = []
     seen = set()
-    # 1. Try Feed first
+    # 1. Fetch from RSS feed with exact mrss:content image extraction
     try:
         req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=4) as r:
             root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:30]:
+            for it in root.findall('.//item')[:35]:
                 title_elem = it.find('title')
                 link_elem = it.find('link')
                 if title_elem is None or not title_elem.text: continue
@@ -176,7 +177,7 @@ def fetch_bbc_live(now_ts):
                 if not is_clean_headline(t, l): continue
 
                 thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
-                img = thumb.attrib['url'] if thumb is not None and 'url' in thumb.attrib else 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+                img = thumb.attrib['url'] if (thumb is not None and 'url' in thumb.attrib) else 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
 
                 items.append({
                     "id": l,
@@ -201,44 +202,50 @@ def fetch_ittefaq_live(now_ts):
         with urllib.request.urlopen(req, timeout=4) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
+            candidates = []
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h: continue
                 parts = h.strip('/').split('/')
-                is_article = False
-                for p in parts:
-                    if p.isdigit() and len(p) >= 5:
-                        is_article = True
-                        break
-                if not is_article: continue
+                if any(p.isdigit() and len(p) >= 5 for p in parts):
+                    t = a.get_text().strip()
+                    if not is_clean_headline(t, h): continue
+                    full_url = h if h.startswith('http') else ('https://www.ittefaq.com.bd' + ('' if h.startswith('/') else '/') + h)
+                    if full_url in seen_links: continue
+                    seen_links.add(full_url)
+                    candidates.append((t, full_url))
+                    if len(candidates) >= 20: break
 
-                t = a.get_text().strip()
-                if not is_clean_headline(t, h): continue
-
-                full_url = h if h.startswith('http') else ('https://www.ittefaq.com.bd' + ('' if h.startswith('/') else '/') + h)
-                if full_url in seen_links: continue
-                seen_links.add(full_url)
-
+            # Concurrently extract OG image for top Ittefaq articles so every card has a real photo!
+            def resolve_ittefaq_og(cand):
+                title, url = cand
                 img = ''
-                img_tag = a.find('img')
-                if img_tag:
-                    img = img_tag.get('src') or img_tag.get('data-src') or ''
-                if not img or not img.startswith('http'):
+                try:
+                    rq = urllib.request.Request(url, headers=headers_social)
+                    with urllib.request.urlopen(rq, timeout=2.5) as resp:
+                        s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                        og = s.find('meta', property='og:image')
+                        if og and og.get('content') and og['content'].startswith('http'):
+                            img = og['content'].strip()
+                except Exception:
+                    pass
+                if not img:
                     img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
-
-                items.append({
-                    "id": full_url,
-                    "title": t,
-                    "link": full_url,
+                return {
+                    "id": url,
+                    "title": title,
+                    "link": url,
                     "timestamp": now_ts,
-                    "category": detect_cat(t, full_url),
+                    "category": detect_cat(title, url),
                     "source_id": "ittefaq",
                     "source_name": "দৈনিক ইত্তেফাক",
                     "source_badge": "Ittefaq",
                     "source_color": "#2563eb",
                     "image": img
-                })
-                if len(items) >= 25: break
+                }
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                items = list(ex.map(resolve_ittefaq_og, candidates))
     except Exception:
         pass
     return items
@@ -250,6 +257,13 @@ def fetch_bdpratidin_live(now_ts):
         with urllib.request.urlopen(req, timeout=4) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
+            alt_map = {}
+            for img in soup.find_all('img'):
+                alt = (img.get('alt') or img.get('title') or '').strip()
+                src = img.get('src') or img.get('data-src') or ''
+                if alt and src.startswith('http') and not any(k in src for k in ['logo', 'icon', 'app', 'android', 'ios']):
+                    alt_map[alt] = src
+
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h or '/202' not in h: continue
@@ -260,11 +274,13 @@ def fetch_bdpratidin_live(now_ts):
                 if full_url in seen_links: continue
                 seen_links.add(full_url)
 
-                img = ''
-                img_tag = a.find('img')
-                if img_tag:
-                    img = img_tag.get('src') or img_tag.get('data-src') or ''
-                if not img or not img.startswith('http'):
+                img = alt_map.get(t, '')
+                if not img:
+                    for alt_k, s_url in alt_map.items():
+                        if t in alt_k or alt_k in t:
+                            img = s_url
+                            break
+                if not img:
                     img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
 
                 items.append({
@@ -291,6 +307,13 @@ def fetch_kalerkantho_live(now_ts):
         with urllib.request.urlopen(req, timeout=4) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
+            alt_map = {}
+            for img in soup.find_all('img'):
+                alt = img.get('alt', '').strip()
+                src = img.get('src') or img.get('data-src') or ''
+                if alt and src.startswith('http') and not any(k in src for k in ['logo', 'icon']):
+                    alt_map[alt] = src
+
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h or ('/online/' not in h and '/202' not in h): continue
@@ -302,11 +325,13 @@ def fetch_kalerkantho_live(now_ts):
                 if full_url in seen_links: continue
                 seen_links.add(full_url)
 
-                img = ''
-                img_tag = a.find('img')
-                if img_tag:
-                    img = img_tag.get('src') or img_tag.get('data-src') or ''
-                if not img or not img.startswith('http'):
+                img = alt_map.get(t, '')
+                if not img:
+                    for alt_k, s_url in alt_map.items():
+                        if t in alt_k or alt_k in t:
+                            img = s_url
+                            break
+                if not img:
                     img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
 
                 items.append({
@@ -334,7 +359,6 @@ def fetch_jugantor_live(now_ts):
             html_text = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html_text, 'html.parser')
             seen_links = set()
-            # Jugantor often has article links wrapping h1-h4 or article cards
             for card in soup.find_all(['div', 'article', 'li']):
                 a_tag = card.find('a')
                 if not a_tag: continue
@@ -342,15 +366,8 @@ def fetch_jugantor_live(now_ts):
                 if not h: continue
                 parts = h.strip('/').split('/')
                 if len(parts) >= 2 and parts[-1].isdigit():
-                    # Title can be inside card or inside 'a'
-                    t = card.get_text().strip()
-                    # if card text is too long, get just the heading
                     h_tag = card.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-                    if h_tag:
-                        t = h_tag.get_text().strip()
-                    else:
-                        t = a_tag.get_text().strip()
-
+                    t = h_tag.get_text().strip() if h_tag else a_tag.get_text().strip()
                     if not is_clean_headline(t, h): continue
 
                     full_url = h if h.startswith('http') else ('https://www.jugantor.com' + ('' if h.startswith('/') else '/') + h)
@@ -361,7 +378,7 @@ def fetch_jugantor_live(now_ts):
                     img_tag = card.find('img') or a_tag.find('img')
                     if img_tag:
                         img = img_tag.get('src') or img_tag.get('data-src') or ''
-                    if not img or not img.startswith('http'):
+                    if not img or not img.startswith('http') or any(k in img for k in ['logo', 'icon']):
                         img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
 
                     items.append({
@@ -400,10 +417,10 @@ def fetch_bdnews24_live(now_ts):
                     seen_links.add(full_url)
 
                     img = ''
-                    img_tag = a.find('img')
+                    img_tag = a.find('img') or (a.parent and a.parent.find('img'))
                     if img_tag:
                         img = img_tag.get('src') or img_tag.get('data-src') or ''
-                    if not img or not img.startswith('http'):
+                    if not img or not img.startswith('http') or 'thumb-B88vr1JV' in img or 'logo' in img:
                         img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
 
                     items.append({
@@ -422,7 +439,6 @@ def fetch_bdnews24_live(now_ts):
     except Exception:
         pass
     return items
-
 
 
 CATEGORY_KEYWORDS = {
