@@ -1,3 +1,4 @@
+import concurrent.futures
 from fastapi import FastAPI, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -80,18 +81,19 @@ def detect_cat(title, url=""):
 
 
 
+
 headers_social = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
 def fetch_prothomalo_live(now_ts):
     items = []
     seen = set()
-    # 1. Fetch from RSS feed with exact mrss:content image extraction
+    raw_candidates = []
     try:
         req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
         with urllib.request.urlopen(req, timeout=4) as r:
             root = ET.fromstring(r.read())
-            for it in root.findall('.//item')[:35]:
+            for it in root.findall('.//item')[:30]:
                 title_elem = it.find('title')
                 link_elem = it.find('link')
                 if title_elem is None or not title_elem.text: continue
@@ -108,58 +110,42 @@ def fetch_prothomalo_live(now_ts):
                     thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
                     if thumb is not None and 'url' in thumb.attrib:
                         img = thumb.attrib['url']
-                if not img or 'defaultog' in img:
-                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
-
-                items.append({
-                    "id": l,
-                    "title": t,
-                    "link": l,
-                    "timestamp": now_ts,
-                    "category": detect_cat(t, l),
-                    "source_id": "prothomalo",
-                    "source_name": "প্রথম আলো",
-                    "source_badge": "Prothom Alo",
-                    "source_color": "#e11d48",
-                    "image": img
-                })
+                if img and 'defaultog' in img:
+                    img = ''
+                raw_candidates.append((t, l, img))
     except Exception:
         pass
 
-    # 2. Scrape live homepage for the freshest breaking stories
-    try:
-        req = urllib.request.Request("https://www.prothomalo.com/", headers=headers_browser)
-        with urllib.request.urlopen(req, timeout=4) as r:
-            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
-                t = a.get_text().strip()
-                if not h or len(t) < 16: continue
-                if any(c in h for c in ['/bangladesh/', '/world/', '/sports/', '/entertainment/', '/business/', '/technology/']):
-                    full_url = h if h.startswith('http') else ('https://www.prothomalo.com' + ('' if h.startswith('/') else '/') + h)
-                    if full_url in seen or not is_clean_headline(t, full_url): continue
-                    seen.add(full_url)
+    # Resolve any missing image via quick parallel OG fetch
+    def resolve_pa(c):
+        t, l, img = c
+        if not img or not img.startswith('http'):
+            try:
+                rq = urllib.request.Request(l, headers=headers_browser)
+                with urllib.request.urlopen(rq, timeout=2) as resp:
+                    s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                    og = s.find('meta', property='og:image')
+                    if og and og.get('content') and og['content'].startswith('http'):
+                        img = og['content'].strip()
+            except Exception:
+                pass
+        if not img:
+            img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+        return {
+            "id": l,
+            "title": t,
+            "link": l,
+            "timestamp": now_ts,
+            "category": detect_cat(t, l),
+            "source_id": "prothomalo",
+            "source_name": "প্রথম আলো",
+            "source_badge": "Prothom Alo",
+            "source_color": "#e11d48",
+            "image": img
+        }
 
-                    img_tag = a.find('img')
-                    img = (img_tag.get('src') or img_tag.get('data-src')) if img_tag else ''
-                    if not img or not img.startswith('http'):
-                        img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
-
-                    items.append({
-                        "id": full_url,
-                        "title": t,
-                        "link": full_url,
-                        "timestamp": now_ts,
-                        "category": detect_cat(t, full_url),
-                        "source_id": "prothomalo",
-                        "source_name": "প্রথম আলো",
-                        "source_badge": "Prothom Alo",
-                        "source_color": "#e11d48",
-                        "image": img
-                    })
-                    if len(items) >= 40: break
-    except Exception:
-        pass
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        items = list(ex.map(resolve_pa, raw_candidates))
     return items
 
 def fetch_bbc_live(now_ts):
@@ -199,40 +185,41 @@ def fetch_ittefaq_live(now_ts):
     items = []
     try:
         req = urllib.request.Request("https://www.ittefaq.com.bd/", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=3) as r:
+        with urllib.request.urlopen(req, timeout=3.5) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
             candidates = []
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h: continue
+                if h.startswith('//'):
+                    h = 'https:' + h
+                elif h.startswith('/'):
+                    h = 'https://www.ittefaq.com.bd' + h
                 parts = h.strip('/').split('/')
                 if any(p.isdigit() and len(p) >= 5 for p in parts):
                     t = a.get_text().strip()
                     if not is_clean_headline(t, h): continue
-                    full_url = h if h.startswith('http') else ('https://www.ittefaq.com.bd' + ('' if h.startswith('/') else '/') + h)
-                    if full_url in seen_links: continue
-                    seen_links.add(full_url)
-                    candidates.append((t, full_url))
+                    if h in seen_links: continue
+                    seen_links.add(h)
+                    candidates.append((t, h))
                     if len(candidates) >= 15: break
 
-            for idx, (t, u) in enumerate(candidates):
+            def resolve_itt(c):
+                t, u = c
                 img = ''
-                # Fast inline OG fetch for the top headlines
-                if idx < 4:
-                    try:
-                        rq = urllib.request.Request(u, headers=headers_social)
-                        with urllib.request.urlopen(rq, timeout=1.2) as resp:
-                            s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
-                            og = s.find('meta', property='og:image')
-                            if og and og.get('content') and og['content'].startswith('http'):
-                                img = og['content'].strip()
-                    except Exception:
-                        pass
+                try:
+                    rq = urllib.request.Request(u, headers=headers_social)
+                    with urllib.request.urlopen(rq, timeout=2) as resp:
+                        s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                        og = s.find('meta', property='og:image')
+                        if og and og.get('content') and og['content'].startswith('http'):
+                            img = og['content'].strip()
+                except Exception:
+                    pass
                 if not img:
                     img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
-
-                items.append({
+                return {
                     "id": u,
                     "title": t,
                     "link": u,
@@ -243,7 +230,10 @@ def fetch_ittefaq_live(now_ts):
                     "source_badge": "Ittefaq",
                     "source_color": "#2563eb",
                     "image": img
-                })
+                }
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                items = list(ex.map(resolve_itt, candidates))
     except Exception:
         pass
     return items
@@ -252,7 +242,7 @@ def fetch_bdpratidin_live(now_ts):
     items = []
     try:
         req = urllib.request.Request("https://www.bd-pratidin.com/", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=3.5) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
             alt_map = {}
@@ -262,12 +252,12 @@ def fetch_bdpratidin_live(now_ts):
                 if alt and src.startswith('http') and not any(k in src for k in ['logo', 'icon', 'app', 'android', 'ios']):
                     alt_map[alt] = src
 
+            candidates = []
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h or '/202' not in h: continue
                 t = a.get_text().strip()
                 if not is_clean_headline(t, h): continue
-
                 full_url = h if h.startswith('http') else ('https://www.bd-pratidin.com' + ('' if h.startswith('/') else '/') + h)
                 if full_url in seen_links: continue
                 seen_links.add(full_url)
@@ -278,22 +268,38 @@ def fetch_bdpratidin_live(now_ts):
                         if t in alt_k or alt_k in t:
                             img = s_url
                             break
+                candidates.append((t, full_url, img))
+                if len(candidates) >= 20: break
+
+            def resolve_bdp(c):
+                t, u, img = c
+                if not img or not img.startswith('http'):
+                    try:
+                        rq = urllib.request.Request(u, headers=headers_social)
+                        with urllib.request.urlopen(rq, timeout=2) as resp:
+                            s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                            og = s.find('meta', property='og:image')
+                            if og and og.get('content') and og['content'].startswith('http'):
+                                img = og['content'].strip()
+                    except Exception:
+                        pass
                 if not img:
                     img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
-
-                items.append({
-                    "id": full_url,
+                return {
+                    "id": u,
                     "title": t,
-                    "link": full_url,
+                    "link": u,
                     "timestamp": now_ts,
-                    "category": detect_cat(t, full_url),
+                    "category": detect_cat(t, u),
                     "source_id": "bdpratidin",
                     "source_name": "বাংলাদেশ প্রতিদিন",
                     "source_badge": "BD Pratidin",
                     "source_color": "#16a34a",
                     "image": img
-                })
-                if len(items) >= 25: break
+                }
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                items = list(ex.map(resolve_bdp, candidates))
     except Exception:
         pass
     return items
@@ -302,7 +308,7 @@ def fetch_kalerkantho_live(now_ts):
     items = []
     try:
         req = urllib.request.Request("https://www.kalerkantho.com/", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=3.5) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
             alt_map = {}
@@ -312,13 +318,13 @@ def fetch_kalerkantho_live(now_ts):
                 if alt and src.startswith('http') and not any(k in src for k in ['logo', 'icon']):
                     alt_map[alt] = src
 
+            candidates = []
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h or ('/online/' not in h and '/202' not in h): continue
                 t = a.get_text().strip()
                 t = re.sub(r'^[০-৯\d]+', '', t).strip()
                 if not is_clean_headline(t, h): continue
-
                 full_url = h if h.startswith('http') else ('https://www.kalerkantho.com' + ('' if h.startswith('/') else '/') + h)
                 if full_url in seen_links: continue
                 seen_links.add(full_url)
@@ -329,22 +335,38 @@ def fetch_kalerkantho_live(now_ts):
                         if t in alt_k or alt_k in t:
                             img = s_url
                             break
+                candidates.append((t, full_url, img))
+                if len(candidates) >= 20: break
+
+            def resolve_kk(c):
+                t, u, img = c
+                if not img or not img.startswith('http'):
+                    try:
+                        rq = urllib.request.Request(u, headers=headers_social)
+                        with urllib.request.urlopen(rq, timeout=2) as resp:
+                            s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                            og = s.find('meta', property='og:image')
+                            if og and og.get('content') and og['content'].startswith('http'):
+                                img = og['content'].strip()
+                    except Exception:
+                        pass
                 if not img:
                     img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
-
-                items.append({
-                    "id": full_url,
+                return {
+                    "id": u,
                     "title": t,
-                    "link": full_url,
+                    "link": u,
                     "timestamp": now_ts,
-                    "category": detect_cat(t, full_url),
+                    "category": detect_cat(t, u),
                     "source_id": "kalerkantho",
                     "source_name": "কালের কণ্ঠ",
                     "source_badge": "Kaler Kantho",
                     "source_color": "#d97706",
                     "image": img
-                })
-                if len(items) >= 25: break
+                }
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                items = list(ex.map(resolve_kk, candidates))
     except Exception:
         pass
     return items
@@ -353,10 +375,11 @@ def fetch_jugantor_live(now_ts):
     items = []
     try:
         req = urllib.request.Request("https://www.jugantor.com/", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=3.5) as r:
             html_text = r.read().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(html_text, 'html.parser')
             seen_links = set()
+            candidates = []
             for card in soup.find_all(['div', 'article', 'li']):
                 a_tag = card.find('a')
                 if not a_tag: continue
@@ -367,7 +390,6 @@ def fetch_jugantor_live(now_ts):
                     h_tag = card.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
                     t = h_tag.get_text().strip() if h_tag else a_tag.get_text().strip()
                     if not is_clean_headline(t, h): continue
-
                     full_url = h if h.startswith('http') else ('https://www.jugantor.com' + ('' if h.startswith('/') else '/') + h)
                     if full_url in seen_links: continue
                     seen_links.add(full_url)
@@ -376,22 +398,40 @@ def fetch_jugantor_live(now_ts):
                     img_tag = card.find('img') or a_tag.find('img')
                     if img_tag:
                         img = img_tag.get('src') or img_tag.get('data-src') or ''
-                    if not img or not img.startswith('http') or any(k in img for k in ['logo', 'icon']):
-                        img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+                    if img and any(k in img for k in ['logo', 'icon']):
+                        img = ''
+                    candidates.append((t, full_url, img))
+                    if len(candidates) >= 20: break
 
-                    items.append({
-                        "id": full_url,
-                        "title": t,
-                        "link": full_url,
-                        "timestamp": now_ts,
-                        "category": detect_cat(t, full_url),
-                        "source_id": "jugantor",
-                        "source_name": "দৈনিক যুগান্তর",
-                        "source_badge": "Jugantor",
-                        "source_color": "#e11d48",
-                        "image": img
-                    })
-                    if len(items) >= 25: break
+            def resolve_jug(c):
+                t, u, img = c
+                if not img or not img.startswith('http'):
+                    try:
+                        rq = urllib.request.Request(u, headers=headers_social)
+                        with urllib.request.urlopen(rq, timeout=2) as resp:
+                            s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                            og = s.find('meta', property='og:image')
+                            if og and og.get('content') and og['content'].startswith('http'):
+                                img = og['content'].strip()
+                    except Exception:
+                        pass
+                if not img:
+                    img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+                return {
+                    "id": u,
+                    "title": t,
+                    "link": u,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, u),
+                    "source_id": "jugantor",
+                    "source_name": "দৈনিক যুগান্তর",
+                    "source_badge": "Jugantor",
+                    "source_color": "#e11d48",
+                    "image": img
+                }
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                items = list(ex.map(resolve_jug, candidates))
     except Exception:
         pass
     return items
@@ -400,16 +440,16 @@ def fetch_bdnews24_live(now_ts):
     items = []
     try:
         req = urllib.request.Request("https://bangla.bdnews24.com/", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=3.5) as r:
             soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
             seen_links = set()
+            candidates = []
             for a in soup.find_all('a'):
                 h = a.get('href', '')
                 if not h: continue
                 if any(c in h for c in ['/bangladesh/', '/world/', '/sport/', '/cricket/', '/economy/', '/opinion/']):
                     t = a.get_text().strip()
                     if not is_clean_headline(t, h): continue
-
                     full_url = h if h.startswith('http') else ('https://bangla.bdnews24.com' + ('' if h.startswith('/') else '/') + h)
                     if full_url in seen_links: continue
                     seen_links.add(full_url)
@@ -418,22 +458,40 @@ def fetch_bdnews24_live(now_ts):
                     img_tag = a.find('img') or (a.parent and a.parent.find('img'))
                     if img_tag:
                         img = img_tag.get('src') or img_tag.get('data-src') or ''
-                    if not img or not img.startswith('http') or 'thumb-B88vr1JV' in img or 'logo' in img:
-                        img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+                    if img and ('thumb-B88vr1JV' in img or 'logo' in img):
+                        img = ''
+                    candidates.append((t, full_url, img))
+                    if len(candidates) >= 20: break
 
-                    items.append({
-                        "id": full_url,
-                        "title": t,
-                        "link": full_url,
-                        "timestamp": now_ts,
-                        "category": detect_cat(t, full_url),
-                        "source_id": "bdnews24",
-                        "source_name": "বিডিনিউজ টোয়েন্টিফোর",
-                        "source_badge": "BDNews24",
-                        "source_color": "#7c3aed",
-                        "image": img
-                    })
-                    if len(items) >= 25: break
+            def resolve_bdn(c):
+                t, u, img = c
+                if not img or not img.startswith('http'):
+                    try:
+                        rq = urllib.request.Request(u, headers=headers_social)
+                        with urllib.request.urlopen(rq, timeout=2) as resp:
+                            s = BeautifulSoup(resp.read().decode('utf-8', errors='ignore'), 'html.parser')
+                            og = s.find('meta', property='og:image')
+                            if og and og.get('content') and og['content'].startswith('http'):
+                                img = og['content'].strip()
+                    except Exception:
+                        pass
+                if not img:
+                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+                return {
+                    "id": u,
+                    "title": t,
+                    "link": u,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, u),
+                    "source_id": "bdnews24",
+                    "source_name": "বিডিনিউজ টোয়েন্টিফোর",
+                    "source_badge": "BDNews24",
+                    "source_color": "#7c3aed",
+                    "image": img
+                }
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                items = list(ex.map(resolve_bdn, candidates))
     except Exception:
         pass
     return items
@@ -487,10 +545,17 @@ def fetch_targeted_category_news(target_category, target_source=None, limit=50):
                     l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
                     if not is_clean_headline(t, l): continue
 
-                    # High quality fallback brand image
-                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
-                    if pid in ['sports', 'entertainment']:
-                        img = 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80'
+                    # Bind authentic themed news photo for category
+                    img = ''
+                    CATEGORY_THEMED_IMAGES = {
+                        'sports': 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80',
+                        'entertainment': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+                        'economy': 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop&q=80',
+                        'tech': 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
+                        'international': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
+                        'national': 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+                    }
+                    img = CATEGORY_THEMED_IMAGES.get(target_category, 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
 
                     items.append({
                         "id": l,

@@ -9461,9 +9461,9 @@
     }
 
     
-      // Auto-enrich any news card that has a fallback image with its authentic news image from newspaper
+      // Auto-enrich news cards that have fallback image directly from API in background
       setTimeout(function() {
-        const fallbackCards = items.filter(it => !it.image || it.image.includes('unsplash.com')).slice(0, 8);
+        const fallbackCards = items.filter(it => !it.image || it.image.includes('unsplash.com')).slice(0, 16);
         fallbackCards.forEach(it => {
           if (!it.is_custom && it.link && it.link.startsWith('http')) {
             fetch('/api/article?url=' + encodeURIComponent(it.link))
@@ -9472,16 +9472,16 @@
                 if (data && data.image && data.image.startsWith('http') && !data.image.includes('unsplash.com')) {
                   it.image = data.image;
                   if (data.paragraphs && data.paragraphs.length > 0) it.paragraphs = data.paragraphs;
-                  const targetImg = document.querySelector('.card-img[data-link="' + it.link + '"]');
-                  if (targetImg) {
+                  const targetImgs = document.querySelectorAll('.card-img[data-link="' + it.link + '"]');
+                  targetImgs.forEach(targetImg => {
                     targetImg.src = data.image;
-                  }
+                  });
                 }
               })
               .catch(() => {});
           }
         });
-      }, 500);
+      }, 200);
 
     function openArticleModal(item) {
       currentModalArticle = item;
