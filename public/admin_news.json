@@ -12,8 +12,8 @@
     "image": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167",
     "time_ago": "এইমাত্র",
     "hidden": false,
-    "published": true,
-    "published_at": 1789902000,
+    "published": false,
+    "published_at": null,
     "is_custom": true,
     "paragraphs": [
       "টেস্ট বিস্তারিত সংবাদ অনুচ্ছেদ।"
