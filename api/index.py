@@ -450,12 +450,18 @@ def get_news(
     if not source or source == 'all' or source == 'bdnews24':
         news.extend(fetch_bdnews24_live(now_ts))
 
-    # Fallback to local high quality cached news if live fetch count is low
-    if len(news) < 15:
-        local_items = load_local_news()
-        for it in local_items:
-            if not source or source == 'all' or it.get('source_id') == source:
-                news.append(it)
+    # Fallback to local initial news if live fetch count is low
+    if len(news) < 5:
+        try:
+            local_json_path = os.path.join(os.path.dirname(__file__), "..", "public", "initial_news.json")
+            if os.path.exists(local_json_path):
+                with open(local_json_path, "r", encoding="utf-8") as f:
+                    local_items = json.load(f)
+                    for it in local_items:
+                        if not source or source == 'all' or it.get('source_id') == source:
+                            news.append(it)
+        except Exception:
+            pass
 
     # Filter out any video content strictly
     clean_news = []
