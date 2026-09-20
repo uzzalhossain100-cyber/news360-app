@@ -9506,7 +9506,7 @@
       document.getElementById('modalMetaSource').innerHTML = '<strong>উৎস:</strong> ' + item.source_name + ' &bull; ' + (CATEGORY_NAMES[item.category] || 'জাতীয়');
       document.getElementById('modalMetaTime').innerText = 'সময়: ' + (item.time_ago || 'এইমাত্র') + (item.published ? ' (' + item.published + ')' : '');
 
-      // Guaranteed image handling: show item image immediately if valid, else placeholder until API response
+      // Instant Image Display from item
       const brandImg = FALLBACK_BRAND_IMAGES[item.source_id] || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80';
       if (item.image && item.image.startsWith('http') && !item.image.includes('unsplash.com')) {
         modalImg.src = item.image;
@@ -9534,8 +9534,8 @@
       modalLoading.style.display = 'none';
       modalContent.style.display = 'block';
 
-      // Always show immediate content skeleton or existing paragraphs
-      let hasRenderedParas = false;
+      // 1. INSTANT PARAGRAPH RENDERING (No wait, full news ready immediately!)
+      let hasParas = false;
       if (item.paragraphs && Array.isArray(item.paragraphs) && item.paragraphs.length > 0) {
         container.innerHTML = '';
         item.paragraphs.forEach(function(p) {
@@ -9543,59 +9543,52 @@
           pe.innerText = p;
           container.appendChild(pe);
         });
-        hasRenderedParas = true;
+        hasParas = true;
       }
 
-      // If no paragraphs yet, show animated loading status
-      if (!hasRenderedParas) {
+      // 2. If article does not have paragraphs yet, fetch in background and render seamlessly
+      if (!hasParas) {
         container.innerHTML = '<div id="articleLiveSpinner" style="padding:25px 15px; text-align:center; color:var(--text-muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;">' +
           '<div style="width:32px; height:32px; border:3px solid #e2e8f0; border-top-color:#e11d48; border-radius:50%; animation:spin 0.7s linear infinite;"></div>' +
           '<span style="font-size:0.95rem; font-weight:500;">সম্পূর্ণ খবর ও আসল ছবি লোড হচ্ছে...</span>' +
         '</div>';
-      }
 
-      // Fetch live full article and high-res image directly from API
-      if (!item.is_custom && item.link && item.link.startsWith('http')) {
-        const fetchUrl = '/api/article?url=' + encodeURIComponent(item.link);
-        fetch(fetchUrl)
-          .then(res => res.json())
-          .then(liveData => {
-            const spinner = document.getElementById('articleLiveSpinner');
-            if (spinner) spinner.remove();
+        if (!item.is_custom && item.link && item.link.startsWith('http')) {
+          fetch('/api/article?url=' + encodeURIComponent(item.link))
+            .then(res => res.json())
+            .then(liveData => {
+              const spinner = document.getElementById('articleLiveSpinner');
+              if (spinner) spinner.remove();
 
-            if (liveData) {
-              // 1. Render all paragraphs
-              if (liveData.paragraphs && Array.isArray(liveData.paragraphs) && liveData.paragraphs.length > 0) {
-                container.innerHTML = '';
-                liveData.paragraphs.forEach(function(p) {
-                  const pe = document.createElement('p');
-                  pe.innerText = p;
-                  container.appendChild(pe);
-                });
-                item.paragraphs = liveData.paragraphs;
-              } else if (!hasRenderedParas) {
-                container.innerHTML = '<p style="font-weight:bold; font-size:1.15rem; margin-bottom:12px;">' + item.title + '</p>' +
-                  '<p>এই বিষয়ে বিস্তারিত সংবাদ পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।</p>';
+              if (liveData) {
+                if (liveData.paragraphs && Array.isArray(liveData.paragraphs) && liveData.paragraphs.length > 0) {
+                  container.innerHTML = '';
+                  liveData.paragraphs.forEach(function(p) {
+                    const pe = document.createElement('p');
+                    pe.innerText = p;
+                    container.appendChild(pe);
+                  });
+                  item.paragraphs = liveData.paragraphs;
+                } else {
+                  container.innerHTML = '<p style="font-weight:bold; font-size:1.15rem; margin-bottom:12px;">' + item.title + '</p>' +
+                    '<p>এই বিষয়ে বিস্তারিত সংবাদ পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।</p>';
+                }
+
+                if (liveData.image && liveData.image.startsWith('http') && !liveData.image.includes('unsplash.com')) {
+                  modalImg.src = liveData.image;
+                  item.image = liveData.image;
+                  const cardImgs = document.querySelectorAll('.card-img[data-link="' + item.link + '"]');
+                  cardImgs.forEach(ci => { ci.src = liveData.image; });
+                }
               }
-
-              // 2. Render high-res real news image
-              if (liveData.image && liveData.image.startsWith('http') && !liveData.image.includes('unsplash.com')) {
-                modalImg.src = liveData.image;
-                item.image = liveData.image;
-                // Also update the card image in grid
-                const cardImgs = document.querySelectorAll('.card-img[data-link="' + item.link + '"]');
-                cardImgs.forEach(ci => { ci.src = liveData.image; });
-              }
-            }
-          })
-          .catch(err => {
-            const spinner = document.getElementById('articleLiveSpinner');
-            if (spinner) spinner.remove();
-            if (!hasRenderedParas) {
+            })
+            .catch(() => {
+              const spinner = document.getElementById('articleLiveSpinner');
+              if (spinner) spinner.remove();
               container.innerHTML = '<p style="font-weight:bold; font-size:1.15rem; margin-bottom:12px;">' + item.title + '</p>' +
                 '<p>বিস্তারিত সংবাদ ও তথ্য জানতে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে ক্লিক করুন।</p>';
-            }
-          });
+            });
+        }
       }
     }
 
