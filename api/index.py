@@ -382,235 +382,61 @@ def fetch_bbc_live(now_ts):
         pass
     return candidates
 
-def fetch_ittefaq_live(now_ts):
+def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts):
     candidates = []
     seen = set()
+    rss_url = f"https://news.google.com/rss/search?q=site:{query_site}&hl=bn&gl=BD&ceid=BD:bn"
     try:
-        req = urllib.request.Request("https://www.ittefaq.com.bd", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=3.0) as r:
-            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
-                if not h: continue
-                if h.startswith('//'): h = 'https:' + h
-                elif h.startswith('/'): h = 'https://www.ittefaq.com.bd' + h
-                
-                parts = h.strip("/").split("/")
-                if not any(p.isdigit() and len(p) >= 5 for p in parts): continue
-                
-                t = a.get_text().strip()
-                if not is_clean_headline(t, h) or h in seen: continue
-                seen.add(h)
-                
-                # Check if there is an image inside or adjacent
-                img_src = ''
-                img_tag = a.find('img') or (a.parent and a.parent.find('img'))
-                if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src') or ''
-                    if img_src.startswith('//'): img_src = 'https:' + img_src
-                    elif img_src.startswith('/'): img_src = 'https://www.ittefaq.com.bd' + img_src
+        req = urllib.request.Request(rss_url, headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=3.5) as r:
+            root = ET.fromstring(r.read())
+            for it in root.findall('.//item')[:25]:
+                t_elem = it.find('title')
+                l_elem = it.find('link')
+                pd_elem = it.find('pubDate')
+                if t_elem is None or not t_elem.text: continue
+                raw_t = t_elem.text.strip()
+                l = l_elem.text.strip() if (l_elem is not None and l_elem.text) else ''
+                # Clean newspaper suffix from headline
+                clean_t = re.sub(r'\s*[-–|]\s*(প্রথম আলো|bbc|দৈনিক ইত্তেফাক|বাংলাদেশ প্রতিদিন|কালের কণ্ঠ|যুগান্তর|বিডিনিউজ২৪|bdnews24|The Daily Ittefaq|Jugantor|bd-pratidin).*$', '', raw_t, flags=re.I).strip()
+                if not is_clean_headline(clean_t, l) or l in seen: continue
+                seen.add(l)
+
+                dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
+                article_ts = int(dt_obj.timestamp()) if dt_obj else int(now_ts - len(candidates) * 60)
 
                 candidates.append({
-                    "id": h,
-                    "title": t,
-                    "link": h,
-                    "timestamp": int(now_ts - len(candidates) * 60),
-                    "category": detect_cat(t, h),
-                    "source_id": "ittefaq",
-                    "source_name": "দৈনিক ইত্তেফাক",
-                    "source_badge": "Ittefaq",
-                    "source_color": "#2563eb",
-                    "image": img_src or 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
+                    "id": l,
+                    "title": clean_t,
+                    "link": l,
+                    "timestamp": article_ts,
+                    "category": detect_cat(clean_t, l),
+                    "source_id": s_id,
+                    "source_name": s_name,
+                    "source_badge": s_badge,
+                    "source_color": s_color,
+                    "image": 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
                     "paragraphs": []
                 })
-                if len(candidates) >= 25: break
     except Exception:
         pass
     return candidates
+
+def fetch_ittefaq_live(now_ts):
+    return fetch_google_site_rss('ittefaq.com.bd', 'ittefaq', 'দৈনিক ইত্তেফাক', 'Ittefaq', '#2563eb', now_ts)
 
 def fetch_bdpratidin_live(now_ts):
-    candidates = []
-    seen = set()
-    try:
-        req = urllib.request.Request("https://www.bd-pratidin.com", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=3.0) as r:
-            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
-                if not h: continue
-                if h.startswith('//'): h = 'https:' + h
-                elif h.startswith('/'): h = 'https://www.bd-pratidin.com' + h
-                
-                parts = h.strip("/").split("/")
-                if not any(p.isdigit() and len(p) >= 4 for p in parts): continue
-                
-                t = a.get_text().strip()
-                if not is_clean_headline(t, h) or h in seen: continue
-                seen.add(h)
-                
-                # Check if there is an image inside or adjacent
-                img_src = ''
-                img_tag = a.find('img') or (a.parent and a.parent.find('img'))
-                if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src') or ''
-                    if img_src.startswith('//'): img_src = 'https:' + img_src
-                    elif img_src.startswith('/'): img_src = 'https://www.bd-pratidin.com' + img_src
-
-                candidates.append({
-                    "id": h,
-                    "title": t,
-                    "link": h,
-                    "timestamp": int(now_ts - len(candidates) * 60),
-                    "category": detect_cat(t, h),
-                    "source_id": "bdpratidin",
-                    "source_name": "বাংলাদেশ প্রতিদিন",
-                    "source_badge": "BD Pratidin",
-                    "source_color": "#16a34a",
-                    "image": img_src or 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
-                    "paragraphs": []
-                })
-                if len(candidates) >= 25: break
-    except Exception:
-        pass
-    return candidates
+    return fetch_google_site_rss('bd-pratidin.com', 'bdpratidin', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a', now_ts)
 
 def fetch_kalerkantho_live(now_ts):
-    candidates = []
-    seen = set()
-    try:
-        req = urllib.request.Request("https://www.kalerkantho.com", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=3.0) as r:
-            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
-                if not h: continue
-                if h.startswith('//'): h = 'https:' + h
-                elif h.startswith('/'): h = 'https://www.kalerkantho.com' + h
-                
-                parts = h.strip("/").split("/")
-                if not any(p.isdigit() and len(p) >= 4 for p in parts): continue
-                
-                t = a.get_text().strip()
-                if not is_clean_headline(t, h) or h in seen: continue
-                seen.add(h)
-                
-                # Check if there is an image inside or adjacent
-                img_src = ''
-                img_tag = a.find('img') or (a.parent and a.parent.find('img'))
-                if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src') or ''
-                    if img_src.startswith('//'): img_src = 'https:' + img_src
-                    elif img_src.startswith('/'): img_src = 'https://www.kalerkantho.com' + img_src
-
-                candidates.append({
-                    "id": h,
-                    "title": t,
-                    "link": h,
-                    "timestamp": int(now_ts - len(candidates) * 60),
-                    "category": detect_cat(t, h),
-                    "source_id": "kalerkantho",
-                    "source_name": "কালের কণ্ঠ",
-                    "source_badge": "Kaler Kantho",
-                    "source_color": "#d97706",
-                    "image": img_src or 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
-                    "paragraphs": []
-                })
-                if len(candidates) >= 25: break
-    except Exception:
-        pass
-    return candidates
+    return fetch_google_site_rss('kalerkantho.com', 'kalerkantho', 'কালের কণ্ঠ', 'Kaler Kantho', '#d97706', now_ts)
 
 def fetch_jugantor_live(now_ts):
-    candidates = []
-    seen = set()
-    try:
-        req = urllib.request.Request("https://www.jugantor.com", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=3.0) as r:
-            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
-                if not h: continue
-                if h.startswith('//'): h = 'https:' + h
-                elif h.startswith('/'): h = 'https://www.jugantor.com' + h
-                
-                parts = h.strip("/").split("/")
-                if not any(p.isdigit() and len(p) >= 4 for p in parts): continue
-                
-                t = a.get_text().strip()
-                if not is_clean_headline(t, h) or h in seen: continue
-                seen.add(h)
-                
-                # Check if there is an image inside or adjacent
-                img_src = ''
-                img_tag = a.find('img') or (a.parent and a.parent.find('img'))
-                if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src') or ''
-                    if img_src.startswith('//'): img_src = 'https:' + img_src
-                    elif img_src.startswith('/'): img_src = 'https://www.jugantor.com' + img_src
-
-                candidates.append({
-                    "id": h,
-                    "title": t,
-                    "link": h,
-                    "timestamp": int(now_ts - len(candidates) * 60),
-                    "category": detect_cat(t, h),
-                    "source_id": "jugantor",
-                    "source_name": "দৈনিক যুগান্তর",
-                    "source_badge": "Jugantor",
-                    "source_color": "#9333ea",
-                    "image": img_src or 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
-                    "paragraphs": []
-                })
-                if len(candidates) >= 25: break
-    except Exception:
-        pass
-    return candidates
+    return fetch_google_site_rss('jugantor.com', 'jugantor', 'দৈনিক যুগান্তর', 'Jugantor', '#9333ea', now_ts)
 
 def fetch_bdnews24_live(now_ts):
-    candidates = []
-    seen = set()
-    try:
-        req = urllib.request.Request("https://bangla.bdnews24.com", headers=headers_social)
-        with urllib.request.urlopen(req, timeout=3.0) as r:
-            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
-            for a in soup.find_all('a'):
-                h = a.get('href', '')
-                if not h: continue
-                if h.startswith('//'): h = 'https:' + h
-                elif h.startswith('/'): h = 'https://bangla.bdnews24.com' + h
-                
-                parts = h.strip("/").split("/")
-                if not any(len(p) >= 4 for p in parts): continue
-                
-                t = a.get_text().strip()
-                if not is_clean_headline(t, h) or h in seen: continue
-                seen.add(h)
-                
-                # Check if there is an image inside or adjacent
-                img_src = ''
-                img_tag = a.find('img') or (a.parent and a.parent.find('img'))
-                if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src') or ''
-                    if img_src.startswith('//'): img_src = 'https:' + img_src
-                    elif img_src.startswith('/'): img_src = 'https://bangla.bdnews24.com' + img_src
+    return fetch_google_site_rss('bangla.bdnews24.com', 'bdnews24', 'বিডিনিউজ টোয়েন্টিফোর', 'bdnews24', '#0891b2', now_ts)
 
-                candidates.append({
-                    "id": h,
-                    "title": t,
-                    "link": h,
-                    "timestamp": int(now_ts - len(candidates) * 60),
-                    "category": detect_cat(t, h),
-                    "source_id": "bdnews24",
-                    "source_name": "বিডিনিউজ টোয়েন্টিফোর",
-                    "source_badge": "bdnews24",
-                    "source_color": "#0891b2",
-                    "image": img_src or 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
-                    "paragraphs": []
-                })
-                if len(candidates) >= 25: break
-    except Exception:
-        pass
-    return candidates
 
 def load_pristine_catalog():
     # 1. Same directory (api/initial_news.json) - Always bundled in Vercel!

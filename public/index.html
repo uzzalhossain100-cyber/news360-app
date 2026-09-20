@@ -2686,13 +2686,12 @@
         const nowSec = Math.floor(Date.now() / 1000);
         const cut24 = nowSec - (24 * 3600);
 
-        // Track what is genuinely new for the CURRENT active category/view
         const currentLinkSet = new Set(allNewsItems.map(it => it.link));
         let addedCount = 0;
 
         const combinedMap = new Map();
 
-        // Fresh items first - ONLY mark and count new if matching active category filter
+        // Put fresh items at the top of the map
         freshItems.forEach(it => {
           const matchesCurrentCategory = (targetCategory === 'all' || it.category === targetCategory);
           const matchesCurrentSource = (targetSource === 'all' || it.source_id === targetSource);
@@ -2702,18 +2701,19 @@
               it.is_new = true;
               addedCount++;
             }
+          } else if (forceRefresh && matchesCurrentCategory && matchesCurrentSource) {
+            it.is_new = true;
           }
           combinedMap.set(it.link, it);
         });
 
-        // Existing items (excluding custom articles, they are re-injected cleanly)
+        // Keep existing items if not superseded
         allNewsItems.forEach(it => {
           if (!it.is_custom && !combinedMap.has(it.link)) {
             combinedMap.set(it.link, it);
           }
         });
 
-        // Filter 24h for regular items
         allNewsItems = Array.from(combinedMap.values()).filter(it => !it.timestamp || it.timestamp >= cut24);
 
         // Always re-integrate custom articles so admin news stays at the top!
