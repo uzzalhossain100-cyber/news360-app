@@ -9506,6 +9506,7 @@
       document.getElementById('modalMetaSource').innerHTML = '<strong>উৎস:</strong> ' + item.source_name + ' &bull; ' + (CATEGORY_NAMES[item.category] || 'জাতীয়');
       document.getElementById('modalMetaTime').innerText = 'সময়: ' + (item.time_ago || 'এইমাত্র') + (item.published ? ' (' + item.published + ')' : '');
 
+      // Guaranteed image handling: show item image immediately if valid, else placeholder until API response
       const brandImg = FALLBACK_BRAND_IMAGES[item.source_id] || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80';
       if (item.image && item.image.startsWith('http') && !item.image.includes('unsplash.com')) {
         modalImg.src = item.image;
@@ -9533,46 +9534,37 @@
       modalLoading.style.display = 'none';
       modalContent.style.display = 'block';
 
-      // 1. If article already has full paragraphs, render them immediately!
-      let foundParas = [];
-      if (item.paragraphs && Array.isArray(item.paragraphs) && item.paragraphs.length > 2) {
-        foundParas = item.paragraphs;
-      } else if (typeof INITIAL_ARTICLES_DATA !== 'undefined' && INITIAL_ARTICLES_DATA[item.link] && INITIAL_ARTICLES_DATA[item.link].paragraphs) {
-        foundParas = INITIAL_ARTICLES_DATA[item.link].paragraphs;
-      }
-
-      if (foundParas && foundParas.length > 0) {
-        foundParas.forEach(function(p) {
-          const pElem = document.createElement('p');
-          pElem.innerText = p;
-          container.appendChild(pElem);
+      // Always show immediate content skeleton or existing paragraphs
+      let hasRenderedParas = false;
+      if (item.paragraphs && Array.isArray(item.paragraphs) && item.paragraphs.length > 0) {
+        container.innerHTML = '';
+        item.paragraphs.forEach(function(p) {
+          const pe = document.createElement('p');
+          pe.innerText = p;
+          container.appendChild(pe);
         });
-      } else {
-        // Show initial loading skeleton / intro text while fetching full live article
-        const loadingNotice = document.createElement('div');
-        loadingNotice.id = 'articleFetchLoadingIndicator';
-        loadingNotice.style.cssText = 'padding:14px; text-align:center; color:var(--text-muted); font-size:0.95rem; display:flex; align-items:center; justify-content:center; gap:8px;';
-        loadingNotice.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:18px; height:18px; border:2px solid #e11d48; border-top-color:transparent; border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite;"></span> <span>পূর্ণাঙ্গ সংবাদ ও ছবি লোড হচ্ছে...</span>';
-        container.appendChild(loadingNotice);
-
-        if (item.paragraphs && Array.isArray(item.paragraphs) && item.paragraphs.length > 0) {
-          item.paragraphs.forEach(function(p) {
-            const pElem = document.createElement('p');
-            pElem.innerText = p;
-            container.appendChild(pElem);
-          });
-        }
+        hasRenderedParas = true;
       }
 
-      // Always fetch live full paragraphs and authentic news image from /api/article
+      // If no paragraphs yet, show animated loading status
+      if (!hasRenderedParas) {
+        container.innerHTML = '<div id="articleLiveSpinner" style="padding:25px 15px; text-align:center; color:var(--text-muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;">' +
+          '<div style="width:32px; height:32px; border:3px solid #e2e8f0; border-top-color:#e11d48; border-radius:50%; animation:spin 0.7s linear infinite;"></div>' +
+          '<span style="font-size:0.95rem; font-weight:500;">সম্পূর্ণ খবর ও আসল ছবি লোড হচ্ছে...</span>' +
+        '</div>';
+      }
+
+      // Fetch live full article and high-res image directly from API
       if (!item.is_custom && item.link && item.link.startsWith('http')) {
-        fetch('/api/article?url=' + encodeURIComponent(item.link))
+        const fetchUrl = '/api/article?url=' + encodeURIComponent(item.link);
+        fetch(fetchUrl)
           .then(res => res.json())
           .then(liveData => {
-            if (liveData) {
-              const indicator = document.getElementById('articleFetchLoadingIndicator');
-              if (indicator) indicator.remove();
+            const spinner = document.getElementById('articleLiveSpinner');
+            if (spinner) spinner.remove();
 
+            if (liveData) {
+              // 1. Render all paragraphs
               if (liveData.paragraphs && Array.isArray(liveData.paragraphs) && liveData.paragraphs.length > 0) {
                 container.innerHTML = '';
                 liveData.paragraphs.forEach(function(p) {
@@ -9581,24 +9573,27 @@
                   container.appendChild(pe);
                 });
                 item.paragraphs = liveData.paragraphs;
+              } else if (!hasRenderedParas) {
+                container.innerHTML = '<p style="font-weight:bold; font-size:1.15rem; margin-bottom:12px;">' + item.title + '</p>' +
+                  '<p>এই বিষয়ে বিস্তারিত সংবাদ পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।</p>';
               }
+
+              // 2. Render high-res real news image
               if (liveData.image && liveData.image.startsWith('http') && !liveData.image.includes('unsplash.com')) {
                 modalImg.src = liveData.image;
                 item.image = liveData.image;
-                // Update card in grid if visible
-                const cardImgs = document.querySelectorAll('.news-card img');
-                cardImgs.forEach(ci => {
-                  if (ci.getAttribute('data-link') === item.link) {
-                    ci.src = liveData.image;
-                  }
-                });
+                // Also update the card image in grid
+                const cardImgs = document.querySelectorAll('.card-img[data-link="' + item.link + '"]');
+                cardImgs.forEach(ci => { ci.src = liveData.image; });
               }
             }
           })
           .catch(err => {
-            const indicator = document.getElementById('articleFetchLoadingIndicator');
-            if (indicator) {
-              indicator.innerText = 'সংবাদের বিস্তারিত পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।';
+            const spinner = document.getElementById('articleLiveSpinner');
+            if (spinner) spinner.remove();
+            if (!hasRenderedParas) {
+              container.innerHTML = '<p style="font-weight:bold; font-size:1.15rem; margin-bottom:12px;">' + item.title + '</p>' +
+                '<p>বিস্তারিত সংবাদ ও তথ্য জানতে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে ক্লিক করুন।</p>';
             }
           });
       }
