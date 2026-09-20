@@ -24,14 +24,37 @@ app.add_middleware(
 headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 headers_bot = {'User-Agent': 'facebookexternalhit/1.1'}
 
-def is_clean_headline(t):
-    if not t or len(t) < 15: return False
-    bulletin_patterns = [
+def is_clean_headline(t, u=""):
+    if not t or len(t) < 14: return False
+    url_lower = (u or "").lower()
+
+    # Filter out direct video, audio, or podcast URLs
+    if any(k in url_lower for k in ['/video/', '/videos/', '/watch', 'youtube.com', 'youtu.be', 'vimeo', '/audio/', '/podcast/']):
+        return False
+
+    # Filter out video-only content and video announcements ("প্রতিটি সেক্টরে যেগুলো ভিডিও বার্তা সেগুলো খবর হিসাবে এখানে লোড হবে না")
+    video_patterns = [
+        r'ভিডিও\s*বার্তা',
+        r'ভিডিওতে\s*দেখুন',
+        r'ভিডিও\s*(দেখুন|সহ|লিংক)',
+        r'লাইভ\s*ভিডিও',
+        r'ভিডিও\s*ভাইরাল',
+        r'ভাইরাল\s*ভিডিও',
+        r'ভিডিও\s*ফুটেজ',
+        r'ভিডিও\s*প্রতিবেদন',
+        r'ভিডিও\s*স্টোরি',
+        r'ভিডিও\s*সংবাদ',
+        r'ভিডিও\s*বুলেটিন',
+        r'ভিডিও\s*ফিচার',
+        r'\[ভিডিও\]',
+        r'\(ভিডিও\)',
+        r'\{ভিডিও\}',
         r'(সকাল|দুপুর|সন্ধ্যা|রাত|রাতের|দিনের)\s*(৭|৮|৯|১০|১১|১২|১|২|৩|৪|৫|৬|\d+)\s*টার\s*(সংবাদ|বুলেটিন|খবর)',
         r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'সংবাদ\s*সারসংক্ষেপ',
+        r'লাইভ\s*আপডেট', r'সরাসরি\s*দেখুন', r'টকশো', r'টক\s*শো',
         r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+'
     ]
-    for pat in bulletin_patterns:
+    for pat in video_patterns:
         if re.search(pat, t, re.IGNORECASE):
             return False
     return True
@@ -55,6 +78,341 @@ def detect_cat(title, url=""):
         if w in t: return 'international'
     return 'national'
 
+
+headers_social = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
+headers_browser = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
+
+def fetch_prothomalo_live(now_ts):
+    items = []
+    seen = set()
+    # 1. Try Feed first
+    try:
+        req = urllib.request.Request("https://www.prothomalo.com/feed", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            root = ET.fromstring(r.read())
+            for it in root.findall('.//item')[:30]:
+                title_elem = it.find('title')
+                link_elem = it.find('link')
+                if title_elem is None or not title_elem.text: continue
+                t = title_elem.text.strip()
+                l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
+                if not is_clean_headline(t, l) or l in seen: continue
+                seen.add(l)
+
+                img = ''
+                content = it.find('{http://search.yahoo.com/mrss/}content')
+                if content is not None and 'url' in content.attrib:
+                    img = content.attrib['url']
+                if not img:
+                    thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                    if thumb is not None and 'url' in thumb.attrib:
+                        img = thumb.attrib['url']
+                if not img or 'defaultog' in img:
+                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+
+                items.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, l),
+                    "source_id": "prothomalo",
+                    "source_name": "প্রথম আলো",
+                    "source_badge": "Prothom Alo",
+                    "source_color": "#e11d48",
+                    "image": img
+                })
+    except Exception:
+        pass
+
+    # 2. Scrape live homepage for the freshest breaking stories
+    try:
+        req = urllib.request.Request("https://www.prothomalo.com/", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
+            for a in soup.find_all('a'):
+                h = a.get('href', '')
+                t = a.get_text().strip()
+                if not h or len(t) < 16: continue
+                if any(c in h for c in ['/bangladesh/', '/world/', '/sports/', '/entertainment/', '/business/', '/technology/']):
+                    full_url = h if h.startswith('http') else ('https://www.prothomalo.com' + ('' if h.startswith('/') else '/') + h)
+                    if full_url in seen or not is_clean_headline(t, full_url): continue
+                    seen.add(full_url)
+
+                    img_tag = a.find('img')
+                    img = (img_tag.get('src') or img_tag.get('data-src')) if img_tag else ''
+                    if not img or not img.startswith('http'):
+                        img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+
+                    items.append({
+                        "id": full_url,
+                        "title": t,
+                        "link": full_url,
+                        "timestamp": now_ts,
+                        "category": detect_cat(t, full_url),
+                        "source_id": "prothomalo",
+                        "source_name": "প্রথম আলো",
+                        "source_badge": "Prothom Alo",
+                        "source_color": "#e11d48",
+                        "image": img
+                    })
+                    if len(items) >= 40: break
+    except Exception:
+        pass
+    return items
+
+def fetch_bbc_live(now_ts):
+    items = []
+    try:
+        req = urllib.request.Request("https://feeds.bbci.co.uk/bengali/rss.xml", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            root = ET.fromstring(r.read())
+            for it in root.findall('.//item')[:30]:
+                title_elem = it.find('title')
+                link_elem = it.find('link')
+                if title_elem is None or not title_elem.text: continue
+                t = title_elem.text.strip()
+                l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
+                if not is_clean_headline(t, l): continue
+
+                thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                img = thumb.attrib['url'] if thumb is not None and 'url' in thumb.attrib else 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+
+                items.append({
+                    "id": l,
+                    "title": t,
+                    "link": l,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, l),
+                    "source_id": "bbc",
+                    "source_name": "বিবিসি বাংলা",
+                    "source_badge": "BBC Bangla",
+                    "source_color": "#dc2626",
+                    "image": img
+                })
+    except Exception:
+        pass
+    return items
+
+def fetch_ittefaq_live(now_ts):
+    items = []
+    try:
+        req = urllib.request.Request("https://www.ittefaq.com.bd/", headers=headers_social)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
+            seen_links = set()
+            for a in soup.find_all('a'):
+                h = a.get('href', '')
+                if not h: continue
+                parts = h.strip('/').split('/')
+                is_article = False
+                for p in parts:
+                    if p.isdigit() and len(p) >= 5:
+                        is_article = True
+                        break
+                if not is_article: continue
+
+                t = a.get_text().strip()
+                if not is_clean_headline(t, h): continue
+
+                full_url = h if h.startswith('http') else ('https://www.ittefaq.com.bd' + ('' if h.startswith('/') else '/') + h)
+                if full_url in seen_links: continue
+                seen_links.add(full_url)
+
+                img = ''
+                img_tag = a.find('img')
+                if img_tag:
+                    img = img_tag.get('src') or img_tag.get('data-src') or ''
+                if not img or not img.startswith('http'):
+                    img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+
+                items.append({
+                    "id": full_url,
+                    "title": t,
+                    "link": full_url,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, full_url),
+                    "source_id": "ittefaq",
+                    "source_name": "দৈনিক ইত্তেফাক",
+                    "source_badge": "Ittefaq",
+                    "source_color": "#2563eb",
+                    "image": img
+                })
+                if len(items) >= 25: break
+    except Exception:
+        pass
+    return items
+
+def fetch_bdpratidin_live(now_ts):
+    items = []
+    try:
+        req = urllib.request.Request("https://www.bd-pratidin.com/", headers=headers_social)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
+            seen_links = set()
+            for a in soup.find_all('a'):
+                h = a.get('href', '')
+                if not h or '/202' not in h: continue
+                t = a.get_text().strip()
+                if not is_clean_headline(t, h): continue
+
+                full_url = h if h.startswith('http') else ('https://www.bd-pratidin.com' + ('' if h.startswith('/') else '/') + h)
+                if full_url in seen_links: continue
+                seen_links.add(full_url)
+
+                img = ''
+                img_tag = a.find('img')
+                if img_tag:
+                    img = img_tag.get('src') or img_tag.get('data-src') or ''
+                if not img or not img.startswith('http'):
+                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+
+                items.append({
+                    "id": full_url,
+                    "title": t,
+                    "link": full_url,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, full_url),
+                    "source_id": "bdpratidin",
+                    "source_name": "বাংলাদেশ প্রতিদিন",
+                    "source_badge": "BD Pratidin",
+                    "source_color": "#16a34a",
+                    "image": img
+                })
+                if len(items) >= 25: break
+    except Exception:
+        pass
+    return items
+
+def fetch_kalerkantho_live(now_ts):
+    items = []
+    try:
+        req = urllib.request.Request("https://www.kalerkantho.com/", headers=headers_social)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
+            seen_links = set()
+            for a in soup.find_all('a'):
+                h = a.get('href', '')
+                if not h or ('/online/' not in h and '/202' not in h): continue
+                t = a.get_text().strip()
+                t = re.sub(r'^[০-৯\d]+', '', t).strip()
+                if not is_clean_headline(t, h): continue
+
+                full_url = h if h.startswith('http') else ('https://www.kalerkantho.com' + ('' if h.startswith('/') else '/') + h)
+                if full_url in seen_links: continue
+                seen_links.add(full_url)
+
+                img = ''
+                img_tag = a.find('img')
+                if img_tag:
+                    img = img_tag.get('src') or img_tag.get('data-src') or ''
+                if not img or not img.startswith('http'):
+                    img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+
+                items.append({
+                    "id": full_url,
+                    "title": t,
+                    "link": full_url,
+                    "timestamp": now_ts,
+                    "category": detect_cat(t, full_url),
+                    "source_id": "kalerkantho",
+                    "source_name": "কালের কণ্ঠ",
+                    "source_badge": "Kaler Kantho",
+                    "source_color": "#d97706",
+                    "image": img
+                })
+                if len(items) >= 25: break
+    except Exception:
+        pass
+    return items
+
+def fetch_jugantor_live(now_ts):
+    items = []
+    try:
+        req = urllib.request.Request("https://www.jugantor.com/", headers=headers_social)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            html_text = r.read().decode('utf-8', errors='ignore')
+            soup = BeautifulSoup(html_text, 'html.parser')
+            seen_links = set()
+            for a in soup.find_all('a'):
+                h = a.get('href', '')
+                if not h: continue
+                parts = h.strip('/').split('/')
+                if len(parts) >= 2 and parts[-1].isdigit():
+                    t = a.get_text().strip()
+                    if not is_clean_headline(t, h): continue
+
+                    full_url = h if h.startswith('http') else ('https://www.jugantor.com' + ('' if h.startswith('/') else '/') + h)
+                    if full_url in seen_links: continue
+                    seen_links.add(full_url)
+
+                    img = ''
+                    img_tag = a.find('img')
+                    if img_tag:
+                        img = img_tag.get('src') or img_tag.get('data-src') or ''
+                    if not img or not img.startswith('http'):
+                        img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+
+                    items.append({
+                        "id": full_url,
+                        "title": t,
+                        "link": full_url,
+                        "timestamp": now_ts,
+                        "category": detect_cat(t, full_url),
+                        "source_id": "jugantor",
+                        "source_name": "দৈনিক যুগান্তর",
+                        "source_badge": "Jugantor",
+                        "source_color": "#e11d48",
+                        "image": img
+                    })
+                    if len(items) >= 25: break
+    except Exception:
+        pass
+    return items
+
+def fetch_bdnews24_live(now_ts):
+    items = []
+    try:
+        req = urllib.request.Request("https://bangla.bdnews24.com/", headers=headers_social)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            soup = BeautifulSoup(r.read().decode('utf-8', errors='ignore'), 'html.parser')
+            seen_links = set()
+            for a in soup.find_all('a'):
+                h = a.get('href', '')
+                if not h: continue
+                if any(c in h for c in ['/bangladesh/', '/world/', '/sport/', '/cricket/', '/economy/', '/opinion/']):
+                    t = a.get_text().strip()
+                    if not is_clean_headline(t, h): continue
+
+                    full_url = h if h.startswith('http') else ('https://bangla.bdnews24.com' + ('' if h.startswith('/') else '/') + h)
+                    if full_url in seen_links: continue
+                    seen_links.add(full_url)
+
+                    img = ''
+                    img_tag = a.find('img')
+                    if img_tag:
+                        img = img_tag.get('src') or img_tag.get('data-src') or ''
+                    if not img or not img.startswith('http'):
+                        img = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80'
+
+                    items.append({
+                        "id": full_url,
+                        "title": t,
+                        "link": full_url,
+                        "timestamp": now_ts,
+                        "category": detect_cat(t, full_url),
+                        "source_id": "bdnews24",
+                        "source_name": "বিডিনিউজ টোয়েন্টিফোর",
+                        "source_badge": "BDNews24",
+                        "source_color": "#7c3aed",
+                        "image": img
+                    })
+                    if len(items) >= 25: break
+    except Exception:
+        pass
+    return items
+
+
 @app.get("/api/news")
 def get_news(
     category: Optional[str] = Query(None),
@@ -62,174 +420,123 @@ def get_news(
     limit: int = Query(100)
 ):
     news = []
-    now = time.time()
+    now_ts = time.time()
     
-        # Dynamic multi-source configuration
-    ALL_NEWSPAPER_CONFIGS = [
-        {
-            "id": "prothomalo",
-            "name": "প্রথম আলো",
-            "badge": "Prothom Alo",
-            "color": "#e11d48",
-            "feed": "https://www.prothomalo.com/feed",
-            "is_direct_rss": True,
-            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
-        },
-        {
-            "id": "bbc",
-            "name": "বিবিসি বাংলা",
-            "badge": "BBC Bangla",
-            "color": "#dc2626",
-            "feed": "https://feeds.bbci.co.uk/bengali/rss.xml",
-            "is_direct_rss": True,
-            "fallback_img": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80"
-        },
-        {
-            "id": "bdpratidin",
-            "name": "বাংলাদেশ প্রতিদিন",
-            "badge": "BD Pratidin",
-            "color": "#16a34a",
-            "feed": "https://news.google.com/rss/search?q=site:bd-pratidin.com&hl=bn&gl=BD&ceid=BD:bn",
-            "is_direct_rss": False,
-            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
-        },
-        {
-            "id": "ittefaq",
-            "name": "দৈনিক ইত্তেফাক",
-            "badge": "Ittefaq",
-            "color": "#2563eb",
-            "feed": "https://news.google.com/rss/search?q=site:ittefaq.com.bd&hl=bn&gl=BD&ceid=BD:bn",
-            "is_direct_rss": False,
-            "fallback_img": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80"
-        },
-        {
-            "id": "kalerkantho",
-            "name": "কালের কণ্ঠ",
-            "badge": "Kaler Kantho",
-            "color": "#d97706",
-            "feed": "https://news.google.com/rss/search?q=site:kalerkantho.com&hl=bn&gl=BD&ceid=BD:bn",
-            "is_direct_rss": False,
-            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
-        },
-        {
-            "id": "jugantor",
-            "name": "দৈনিক যুগান্তর",
-            "badge": "Jugantor",
-            "color": "#e11d48",
-            "feed": "https://news.google.com/rss/search?q=site:jugantor.com&hl=bn&gl=BD&ceid=BD:bn",
-            "is_direct_rss": False,
-            "fallback_img": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80"
-        },
-        {
-            "id": "bdnews24",
-            "name": "বিডিনিউজ টোয়েন্টিফোর",
-            "badge": "BDNews24",
-            "color": "#7c3aed",
-            "feed": "https://news.google.com/rss/search?q=site:bangla.bdnews24.com&hl=bn&gl=BD&ceid=BD:bn",
-            "is_direct_rss": False,
-            "fallback_img": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80"
-        }
-    ]
+    # 1. Prothom Alo
+    if not source or source == 'all' or source == 'prothomalo':
+        news.extend(fetch_prothomalo_live(now_ts))
 
-    # If user selected a specific newspaper, prioritize fetching that newspaper directly!
-    target_configs = ALL_NEWSPAPER_CONFIGS
-    if source and source != 'all':
-        matched = [cfg for cfg in ALL_NEWSPAPER_CONFIGS if cfg["id"] == source]
-        if matched:
-            target_configs = matched
+    # 2. BBC Bangla
+    if not source or source == 'all' or source == 'bbc':
+        news.extend(fetch_bbc_live(now_ts))
 
-    for cfg in target_configs:
-        try:
-            req = urllib.request.Request(cfg["feed"], headers=headers_browser)
-            with urllib.request.urlopen(req, timeout=4) as r:
-                root = ET.fromstring(r.read())
-                for it in root.findall('.//item')[:30]:
-                    title_elem = it.find('title')
-                    link_elem = it.find('link')
-                    if title_elem is None or not title_elem.text: continue
-                    t = title_elem.text.strip()
-                    # Clean source prefix/suffix e.g. " - কালের কণ্ঠ" or " - বাংলাদেশ প্রতিদিন"
-                    t = re.sub(r'\s*-\s*(কালের কণ্ঠ|বাংলাদেশ প্রতিদিন|ইত্তেফাক|যুগান্তর|Prothom Alo|প্রথম আলো|BBC News বাংলা|bdnews24).*$', '', t)
-                    if not is_clean_headline(t): continue
+    # 3. Daily Ittefaq (Live Scraper)
+    if not source or source == 'all' or source == 'ittefaq':
+        news.extend(fetch_ittefaq_live(now_ts))
 
-                    l = link_elem.text.strip() if link_elem is not None and link_elem.text else ''
-                    if not l: continue
+    # 4. Bangladesh Pratidin (Live Scraper)
+    if not source or source == 'all' or source == 'bdpratidin':
+        news.extend(fetch_bdpratidin_live(now_ts))
 
-                    img = ''
-                    content = it.find('{http://search.yahoo.com/mrss/}content')
-                    if content is not None and 'url' in content.attrib:
-                        img = content.attrib['url']
-                    if not img:
-                        thumb = it.find('{http://search.yahoo.com/mrss/}thumbnail')
-                        if thumb is not None and 'url' in thumb.attrib:
-                            img = thumb.attrib['url']
-                    if not img or 'defaultog' in img:
-                        img = cfg["fallback_img"]
+    # 5. Kaler Kantho (Live Scraper)
+    if not source or source == 'all' or source == 'kalerkantho':
+        news.extend(fetch_kalerkantho_live(now_ts))
 
-                    # PubDate if present
-                    pub_ts = now
-                    pub_elem = it.find('pubDate')
-                    if pub_elem is not None and pub_elem.text:
-                        try:
-                            import email.utils
-                            parsed_tuple = email.utils.parsedate_tz(pub_elem.text)
-                            if parsed_tuple:
-                                pub_ts = email.utils.mktime_tz(parsed_tuple)
-                        except Exception:
-                            pass
+    # 6. Daily Jugantor (Live Scraper)
+    if not source or source == 'all' or source == 'jugantor':
+        news.extend(fetch_jugantor_live(now_ts))
 
-                    cat = detect_cat(t)
-                    news.append({
-                        "id": l,
-                        "title": t,
-                        "link": l,
-                        "timestamp": pub_ts,
-                        "category": cat,
-                        "source_id": cfg["id"],
-                        "source_name": cfg["name"],
-                        "source_badge": cfg["badge"],
-                        "source_color": cfg["color"],
-                        "image": img
-                    })
-        except Exception as e:
-            pass
+    # 7. BDNews24 (Live Scraper)
+    if not source or source == 'all' or source == 'bdnews24':
+        news.extend(fetch_bdnews24_live(now_ts))
 
     # Fallback to local high quality cached news if live fetch count is low
-    try:
-        with open(os.path.join(os.path.dirname(__file__), '../public/initial_news.json'), 'r', encoding='utf-8') as f:
-            cached = json.load(f)
-            current_links = set(it['link'] for it in news)
-            for it in cached:
-                if it['link'] not in current_links and 'unsplash' not in it.get('image', ''):
-                    news.append(it)
-    except Exception:
-        pass
+    if len(news) < 15:
+        local_items = load_local_news()
+        for it in local_items:
+            if not source or source == 'all' or it.get('source_id') == source:
+                news.append(it)
 
+    # Filter out any video content strictly
+    clean_news = []
+    seen = set()
+    for item in news:
+        t = item.get("title", "")
+        l = item.get("link", "")
+        if not is_clean_headline(t, l): continue
+        if l in seen: continue
+        seen.add(l)
+        clean_news.append(item)
+
+    # Filter by category if requested
     if category and category != 'all':
-        news = [it for it in news if is_clean_headline(it['title']) and it['category'] == category]
-    news = [it for it in news if is_clean_headline(it['title'])]
-    if source and source != 'all':
-        news = [it for it in news if it['source_id'] == source]
+        clean_news = [n for n in clean_news if n.get('category') == category]
 
-    return {"status": "success", "count": len(news), "news": news[:limit]}
+    return {
+        "status": "success",
+        "count": len(clean_news[:limit]),
+        "news": clean_news[:limit]
+    }
+
 
 @app.get("/api/article")
 def get_article(url: str = Query(...)):
     paras = []
     title = ""
+    image = ""
     try:
-        headers = headers_browser if ('prothomalo' in url or 'bbc' in url) else headers_bot
+        headers = headers_browser if ('prothomalo' in url or 'bbc' in url) else headers_social
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=4) as r:
-            soup = BeautifulSoup(r.read(), 'html.parser')
+        with urllib.request.urlopen(req, timeout=5) as r:
+            html_content = r.read().decode('utf-8', errors='ignore')
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Title
             h1 = soup.find('h1')
-            if h1: title = h1.get_text(strip=True)
-            for p in soup.find_all('p'):
+            if h1:
+                title = h1.get_text(strip=True)
+            if not title:
+                og_title = soup.find('meta', property='og:title')
+                if og_title and og_title.get('content'):
+                    title = og_title['content'].strip()
+
+            # Image
+            og_img = soup.find('meta', property='og:image')
+            if og_img and og_img.get('content'):
+                image = og_img['content'].strip()
+            if not image:
+                tw_img = soup.find('meta', attrs={'name': 'twitter:image'})
+                if tw_img and tw_img.get('content'):
+                    image = tw_img['content'].strip()
+
+            # Clean content paragraphs
+            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript']):
+                tag.decompose()
+
+            # Try article container first if present
+            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|story|article|detail|news-details|news_content)', re.I)) or soup
+            
+            seen_paras = set()
+            for p in article_body.find_all('p'):
                 txt = p.get_text(strip=True)
-                if len(txt) > 35: paras.append(txt)
+                # Filter out video promos, copyright notices, and boilerplate
+                if len(txt) > 30 and not is_video_or_bulletin(txt):
+                    if txt not in seen_paras and not any(skip in txt for skip in ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন']):
+                        seen_paras.add(txt)
+                        paras.append(txt)
     except Exception:
         pass
-    return {"title": title, "paragraphs": paras[:10]}
+    return {"title": title, "image": image, "paragraphs": paras[:15]}
+
+def is_video_or_bulletin(text):
+    video_patterns = [
+        r'ভিডিও\s*বার্তা', r'ভিডিওতে\s*দেখুন', r'ভিডিও\s*(দেখুন|সহ|লিংক)',
+        r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'টকশো'
+    ]
+    for pat in video_patterns:
+        if re.search(pat, text, re.IGNORECASE):
+            return True
+    return False
 
 @app.get("/api/tts")
 async def tts_stream(text: str = Query(...)):
