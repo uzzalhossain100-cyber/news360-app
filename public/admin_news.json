@@ -28,25 +28,5 @@
       "গত মাসে এক সংবাদ সম্মেলনে ইরানি ফার্মাসিস্টস অ্যাসোসিয়েশনের প্রধান শাহরাম কালান্তারি জানান যে, ওষুধের এই ঘাটতি প্রায় ৮০০ ধরনের ওষুধের ওপর প্রভাব ফেলেছে; খরচ বেড়ে যাওয়ায় ফার্মেসিগুলো এর বিকল্প ওষুধও সংগ্রহ করতে পারছে না।",
       "টেলিফোনে আলাপকালে ওই ক্যান্সার রোগী আরও বলেন, “সবাই বলে আমরা সাহসী। কিন্তু মৃত্যুর মুখে দাঁড়িয়ে সাহসিকতার কোনো অর্থ আছে কি না, তা আমি জানি না।”"
     ]
-  },
-  {
-    "id": "test_sync_123",
-    "title": "টেস্ট সংবাদ সিঙ্ক",
-    "link": "https://newsbangla.vercel.app/article/test_sync_123",
-    "timestamp": 1789902000,
-    "category": "national",
-    "source_id": "newsbangla",
-    "source_name": "NewsBangla",
-    "source_badge": "NewsBangla",
-    "source_color": "#e11d48",
-    "image": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167",
-    "time_ago": "এইমাত্র",
-    "hidden": false,
-    "published": true,
-    "published_at": 1789911341,
-    "is_custom": true,
-    "paragraphs": [
-      "টেস্ট বিস্তারিত সংবাদ অনুচ্ছেদ।"
-    ]
   }
 ]
