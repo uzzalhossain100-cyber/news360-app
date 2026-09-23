@@ -1,10 +1,10 @@
 {
-  "total_pageviews": 0,
-  "month_pageviews": 0,
-  "year_pageviews": 0,
-  "total_unique": 0,
-  "month_unique": 0,
-  "year_unique": 0,
+  "total_pageviews": 1,
+  "month_pageviews": 1,
+  "year_pageviews": 1,
+  "total_unique": 1,
+  "month_unique": 1,
+  "year_unique": 1,
   "current_month": "2026-09",
   "current_year": "2026",
   "ip_hash_set": []
