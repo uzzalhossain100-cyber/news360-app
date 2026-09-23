@@ -363,15 +363,18 @@ def fetch_prothomalo_live(now_ts):
                 item["paragraphs"] = art["paragraphs"]
         except Exception:
             pass
-        if not item.get("image"):
-            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80')
+        if not item.get("image") or not item["image"].strip():
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        top_slice = candidates[:6]
-        rest_slice = candidates[6:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        top_slice = candidates[:8]
+        rest_slice = candidates[8:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
             enriched_top = list(ex.map(enrich_item, top_slice))
+        for it in rest_slice:
+            if not it.get("image"):
+                it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         candidates = enriched_top + rest_slice
 
     return candidates
@@ -433,15 +436,18 @@ def fetch_bbc_live(now_ts):
                 item["paragraphs"] = art["paragraphs"]
         except Exception:
             pass
-        if not item.get("image"):
-            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80')
+        if not item.get("image") or not item["image"].strip():
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        top_slice = candidates[:6]
-        rest_slice = candidates[6:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        top_slice = candidates[:8]
+        rest_slice = candidates[8:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
             enriched_top = list(ex.map(enrich_item, top_slice))
+        for it in rest_slice:
+            if not it.get("image"):
+                it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         candidates = enriched_top + rest_slice
 
     return candidates
@@ -639,15 +645,18 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
                 item["paragraphs"] = art["paragraphs"]
         except Exception:
             pass
-        if not item.get("image"):
-            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80')
+        if not item.get("image") or not item["image"].strip():
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        top_slice = candidates[:6]
-        rest_slice = candidates[6:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        top_slice = candidates[:8]
+        rest_slice = candidates[8:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
             enriched_top = list(ex.map(enrich_item, top_slice))
+        for it in rest_slice:
+            if not it.get("image"):
+                it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         candidates = enriched_top + rest_slice
 
     return candidates
