@@ -2702,9 +2702,13 @@
           if (!currentLinkSet.has(it.link)) {
             it.is_new = true;
             addedCount++;
+          } else if (isManualUserRefresh) {
+            it.is_new = true;
+            addedCount++;
           }
         });
 
+        // Always put fresh live items at the front, replacing old cached copies
         const existingRemaining = allNewsItems.filter(oldIt => !freshItems.some(f => f.link === oldIt.link));
         allNewsItems = [...freshItems, ...existingRemaining];
 
@@ -3135,9 +3139,6 @@
       document.body.style.overflow = 'hidden';
       modal.scrollTop = 0;
 
-      modalLoading.style.display = 'none';
-      modalContent.style.display = 'block';
-
       // 1. Gather all available paragraphs from item or cache
       let foundParas = [];
       if (item.paragraphs && Array.isArray(item.paragraphs) && item.paragraphs.length > 0) {
@@ -3147,40 +3148,84 @@
       }
 
       if (foundParas && foundParas.length > 0) {
+        modalLoading.style.display = 'none';
+        modalContent.style.display = 'block';
         foundParas.forEach(function(p) {
           const pElem = document.createElement('p');
           pElem.innerText = p;
+          pElem.style.lineHeight = '1.85';
+          pElem.style.marginBottom = '16px';
+          pElem.style.fontSize = '1.05rem';
+          pElem.style.color = 'var(--text-main)';
           container.appendChild(pElem);
         });
       } else {
-        // High quality informative summary and full article reader
-        const introP = document.createElement('p');
-        introP.innerText = item.title;
-        introP.style.fontWeight = 'bold';
-        introP.style.fontSize = '1.15rem';
-        container.appendChild(introP);
+        // Show loading spinner immediately until live full paragraphs are loaded
+        modalLoading.style.display = 'flex';
+        modalContent.style.display = 'none';
 
-        const descP = document.createElement('p');
-        descP.innerText = 'এই বিষয়ে ' + item.source_name + '-এর বিশেষ সম্পাদকীয় ও মাঠপর্যায়ের সর্বশেষ তথ্য সংগ্রহ করা হয়েছে। সংবাদের পূর্ণাঙ্গ সংস্করণ, সংশ্লিষ্ট নথিপত্র ও অতিরিক্ত ভিডিও ফুটেজ সরাসরি মূল পোর্টালে প্রকাশিত হয়েছে। বিস্তারিত পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।';
-        container.appendChild(descP);
+        const artUrl = '/api/article?url=' + encodeURIComponent(item.link) + '&source_id=' + (item.source_id || '') + '&title_hint=' + encodeURIComponent(item.title);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-        // Try background fetch for live scraped paragraphs
-        fetch('/api/article?url=' + encodeURIComponent(item.link) + '&source_id=' + item.source_id + '&title_hint=' + encodeURIComponent(item.title))
+        fetch(artUrl, { signal: controller.signal })
           .then(res => res.json())
           .then(liveData => {
+            clearTimeout(timeoutId);
+            modalLoading.style.display = 'none';
+            modalContent.style.display = 'block';
+            container.innerHTML = '';
+
             if (liveData && liveData.paragraphs && liveData.paragraphs.length > 0) {
-              container.innerHTML = '';
+              item.paragraphs = liveData.paragraphs;
               liveData.paragraphs.forEach(function(p) {
                 const pe = document.createElement('p');
                 pe.innerText = p;
+                pe.style.lineHeight = '1.85';
+                pe.style.marginBottom = '16px';
+                pe.style.fontSize = '1.05rem';
+                pe.style.color = 'var(--text-main)';
                 container.appendChild(pe);
               });
               if (liveData.image) {
                 modalImg.src = liveData.image;
+                item.image = liveData.image;
+                renderNewsGrid();
               }
+            } else {
+              const introP = document.createElement('p');
+              introP.innerText = item.title;
+              introP.style.fontWeight = 'bold';
+              introP.style.fontSize = '1.15rem';
+              introP.style.lineHeight = '1.7';
+              container.appendChild(introP);
+
+              const descP = document.createElement('p');
+              descP.innerText = 'এই ঘটনার বিস্তারিত তথ্য, সংবাদ বিশ্লেষণ ও অতিরিক্ত প্রতিবেদন সরাসরি ' + item.source_name + '-এর অনলাইন সংস্করণ থেকে গৃহীত। সম্পূর্ণ সংবাদ সরাসরি তাদের পোর্টালে পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।';
+              descP.style.lineHeight = '1.85';
+              descP.style.marginTop = '14px';
+              container.appendChild(descP);
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            clearTimeout(timeoutId);
+            modalLoading.style.display = 'none';
+            modalContent.style.display = 'block';
+            container.innerHTML = '';
+
+            const introP = document.createElement('p');
+            introP.innerText = item.title;
+            introP.style.fontWeight = 'bold';
+            introP.style.fontSize = '1.15rem';
+            introP.style.lineHeight = '1.7';
+            container.appendChild(introP);
+
+            const descP = document.createElement('p');
+            descP.innerText = 'এই বিষয়ে ' + item.source_name + '-এর অনলাইন সংস্করণ ও সংশ্লিষ্ট বিভাগ থেকে সর্বশেষ তথ্য হালনাগাদ করা হয়েছে। সম্পূর্ণ সংস্করণ সরাসরি পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।';
+            descP.style.lineHeight = '1.85';
+            descP.style.marginTop = '14px';
+            container.appendChild(descP);
+          });
       }
     }
 
