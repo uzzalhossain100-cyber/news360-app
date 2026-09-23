@@ -346,6 +346,30 @@ def fetch_prothomalo_live(now_ts):
                 })
     except Exception:
         pass
+
+    # Enrich top 6 items with real og:image and paragraphs concurrently
+    def enrich_item(item):
+        if item.get("image") and item.get("paragraphs"):
+            return item
+        try:
+            art = get_article(item["link"], item["source_id"], item["title"])
+            if art.get("image"):
+                item["image"] = art["image"]
+            if art.get("paragraphs"):
+                item["paragraphs"] = art["paragraphs"]
+        except Exception:
+            pass
+        if not item.get("image"):
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80')
+        return item
+
+    if candidates:
+        top_slice = candidates[:6]
+        rest_slice = candidates[6:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+            enriched_top = list(ex.map(enrich_item, top_slice))
+        candidates = enriched_top + rest_slice
+
     return candidates
 
 def fetch_bbc_live(now_ts):
@@ -392,6 +416,30 @@ def fetch_bbc_live(now_ts):
                 })
     except Exception:
         pass
+
+    # Enrich top 6 items with real og:image and paragraphs concurrently
+    def enrich_item(item):
+        if item.get("image") and item.get("paragraphs"):
+            return item
+        try:
+            art = get_article(item["link"], item["source_id"], item["title"])
+            if art.get("image"):
+                item["image"] = art["image"]
+            if art.get("paragraphs"):
+                item["paragraphs"] = art["paragraphs"]
+        except Exception:
+            pass
+        if not item.get("image"):
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80')
+        return item
+
+    if candidates:
+        top_slice = candidates[:6]
+        rest_slice = candidates[6:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+            enriched_top = list(ex.map(enrich_item, top_slice))
+        candidates = enriched_top + rest_slice
+
     return candidates
 
 CATEGORY_KEYWORDS = {
@@ -470,11 +518,35 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
                     "source_name": s_name,
                     "source_badge": s_badge,
                     "source_color": s_color,
-                    "image": feed_img or BRAND_HD_IMAGES.get(s_id, 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'),
+                    "image": feed_img,
                     "paragraphs": []
                 })
     except Exception:
         pass
+
+    # Enrich top 6 items with real og:image and paragraphs concurrently
+    def enrich_item(item):
+        if item.get("image") and item.get("paragraphs"):
+            return item
+        try:
+            art = get_article(item["link"], item["source_id"], item["title"])
+            if art.get("image"):
+                item["image"] = art["image"]
+            if art.get("paragraphs"):
+                item["paragraphs"] = art["paragraphs"]
+        except Exception:
+            pass
+        if not item.get("image"):
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80')
+        return item
+
+    if candidates:
+        top_slice = candidates[:6]
+        rest_slice = candidates[6:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+            enriched_top = list(ex.map(enrich_item, top_slice))
+        candidates = enriched_top + rest_slice
+
     return candidates
 
 def fetch_channel24_live(now_ts, category=None):
@@ -602,8 +674,8 @@ def get_news(
     now_ts = time.time()
     cache_key = f"{source}_{category}_{limit}"
 
-    # Return cached data within 30 seconds unless force_refresh requested
-    if not force_refresh and (now_ts - _CACHE_NEWS_TIME < 30) and cache_key in _CACHE_NEWS_DATA:
+    # Return cached data within 20 seconds strictly unless force_refresh requested
+    if not force_refresh and (now_ts - _CACHE_NEWS_TIME < 20) and cache_key in _CACHE_NEWS_DATA:
         return _CACHE_NEWS_DATA[cache_key]
     news = []
     
@@ -923,12 +995,18 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
     # Decode Google News redirect if needed
     if 'news.google.com' in real_url:
         try:
-            from googlenewsdecoder import new_decoderv1
-            res = new_decoderv1(real_url)
-            if res.get('status') and res.get('decoded_url'):
+            from googlenewsdecoder import gnewsdecoder
+            res = gnewsdecoder(real_url)
+            if (res.get('status') or res.get('success')) and res.get('decoded_url'):
                 real_url = res['decoded_url']
         except Exception:
-            pass
+            try:
+                from googlenewsdecoder import new_decoderv1
+                res = new_decoderv1(real_url)
+                if res.get('status') and res.get('decoded_url'):
+                    real_url = res['decoded_url']
+            except Exception:
+                pass
 
     ua_list = [
         'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
