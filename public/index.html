@@ -2454,11 +2454,7 @@
       updateHeaderLiveDate();
       // Render pre-embedded data instantly
       if (typeof INITIAL_NEWS_DATA !== 'undefined' && Array.isArray(INITIAL_NEWS_DATA) && INITIAL_NEWS_DATA.length > 0) {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const cut24 = nowSec - (24 * 3600);
-        allNewsItems = INITIAL_NEWS_DATA.filter(function(it) {
-          return !it.timestamp || it.timestamp >= cut24;
-        });
+        allNewsItems = [...INITIAL_NEWS_DATA];
         allNewsItems.forEach(function(item) {
           if (item.timestamp) {
             item.time_ago = calculateTimeAgo(item.timestamp);
@@ -2475,7 +2471,7 @@
       recordSiteVisitorHit();
 
       startAutoRefreshTimer();
-      loadNews();
+      loadNews(true);
 
       // Check if URL has ?article= or ?link= parameter to open article directly
       checkAndOpenArticleFromUrl();
