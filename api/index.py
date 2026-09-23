@@ -102,8 +102,20 @@ def detect_cat(title, url=""):
         return 'tech'
     if any(k in u for k in ['/economy/', '/business/', '/arthoniti/', '/banijjo/', '/stock/']):
         return 'economy'
+    if any(k in u for k in ['/islamic-life/', '/islam/', '/religion/', '/dhormo/', '/islamic/']):
+        return 'islamic'
     if any(k in u for k in ['/international/', '/world/', '/bidesh/', '/prabash/']):
         return 'international'
+
+    # 1.5 Islamic Life Priority Analysis
+    islamicWords = [
+        'কোরআন', 'হাদিস', 'ইসলাম', 'নামাজ', 'রোজা', 'রমজান', 'হজ', 'যাকাত', 'মসজিদ', 'মাদ্রাসা',
+        'হাফেজ', 'হাফেজে কোরআন', 'ইমাম', 'মুয়াজ্জিন', 'সুন্নাহ', 'নবীজি', 'রাসুলুল্লাহ', 'মহানবী',
+        'কোরআনে হাফেজ', 'পবিত্র মক্কা', 'মদিনা', 'ফতোয়া', 'জুম্মা', 'ইসলামিক', 'আলেম', 'ওলামা',
+        'দোয়া', 'আমল', 'সুরা', 'তাফসির', 'শরীয়ত', 'তাহাজ্জুদ', 'মুফতি', 'মাওলানা'
+    ]
+    for w in islamicWords:
+        if w in t: return 'islamic'
 
     # 2. Strict Headline Keywords Analysis (Sports checked first so financial terms in sports don't misclassify)
     sportsWords = [
@@ -382,10 +394,39 @@ def fetch_bbc_live(now_ts):
         pass
     return candidates
 
-def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts):
+CATEGORY_KEYWORDS = {
+    'sports': 'খেলাধুলা OR ক্রিকেট OR ফুটবল',
+    'entertainment': 'বিনোদন OR সিনেমা OR নাটক',
+    'tech': 'প্রযুক্তি OR মোবাইল OR ইন্টারনেট',
+    'economy': 'অর্থনীতি OR ব্যাংক OR শেয়ারবাজার OR বাজেট',
+    'international': 'আন্তর্জাতিক OR বিশ্ব OR যুদ্ধ',
+    'islamic': 'ইসলাম OR কোরআন OR হাদিস OR নামাজ OR রোজা',
+    'national': 'জাতীয় OR বাংলাদেশ'
+}
+
+BRAND_HD_IMAGES = {
+    'prothomalo': 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80',
+    'bbc': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
+    'channel24': 'https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=800&auto=format&fit=crop&q=80',
+    'ntv': 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=800&auto=format&fit=crop&q=80',
+    'rtv': 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800&auto=format&fit=crop&q=80',
+    'ittefaq': 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&auto=format&fit=crop&q=80',
+    'bdpratidin': 'https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=800&auto=format&fit=crop&q=80',
+    'kalerkantho': 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=800&auto=format&fit=crop&q=80',
+    'jugantor': 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800&auto=format&fit=crop&q=80',
+    'bdnews24': 'https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&auto=format&fit=crop&q=80'
+}
+
+def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, category=None):
     candidates = []
     seen = set()
-    rss_url = f"https://news.google.com/rss/search?q=site:{query_site}&hl=bn&gl=BD&ceid=BD:bn"
+    cat_query = ""
+    if category and category != 'all' and category in CATEGORY_KEYWORDS:
+        cat_query = f" {CATEGORY_KEYWORDS[category]}"
+    
+    query = f"site:{query_site}{cat_query}"
+    encoded_query = urllib.parse.quote(query)
+    rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=bn&gl=BD&ceid=BD:bn"
     try:
         req = urllib.request.Request(rss_url, headers=headers_browser)
         with urllib.request.urlopen(req, timeout=3.5) as r:
@@ -405,46 +446,60 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts):
                 dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
                 article_ts = int(dt_obj.timestamp()) if dt_obj else int(now_ts - len(candidates) * 60)
 
+                # Check RSS media/thumbnail
+                feed_img = ""
+                m_c = it.find('{http://search.yahoo.com/mrss/}content')
+                if m_c is not None and 'url' in m_c.attrib:
+                    feed_img = m_c.attrib['url']
+                if not feed_img:
+                    m_th = it.find('{http://search.yahoo.com/mrss/}thumbnail')
+                    if m_th is not None and 'url' in m_th.attrib:
+                        feed_img = m_th.attrib['url']
+                if not feed_img:
+                    enc = it.find('enclosure')
+                    if enc is not None and 'url' in enc.attrib:
+                        feed_img = enc.attrib['url']
+
                 candidates.append({
                     "id": l,
                     "title": clean_t,
                     "link": l,
                     "timestamp": article_ts,
-                    "category": detect_cat(clean_t, l),
+                    "category": category if (category and category != 'all') else detect_cat(clean_t, l),
                     "source_id": s_id,
                     "source_name": s_name,
                     "source_badge": s_badge,
                     "source_color": s_color,
-                    "image": 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
+                    "image": feed_img or BRAND_HD_IMAGES.get(s_id, 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'),
                     "paragraphs": []
                 })
     except Exception:
         pass
     return candidates
 
-def fetch_channel24_live(now_ts):
-    return fetch_google_site_rss('channel24bd.tv', 'channel24', 'চ্যানেল ২৪', 'Channel 24', '#0284c7', now_ts)
+def fetch_channel24_live(now_ts, category=None):
+    return fetch_google_site_rss('channel24bd.tv', 'channel24', 'চ্যানেল ২৪', 'Channel 24', '#0284c7', now_ts, category)
 
-def fetch_ntv_live(now_ts):
-    return fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts)
+def fetch_ntv_live(now_ts, category=None):
+    return fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category)
 
-def fetch_rtv_live(now_ts):
-    return fetch_google_site_rss('rtvonline.com', 'rtv', 'আরটিভি (RTV)', 'RTV', '#ea580c', now_ts)
+def fetch_rtv_live(now_ts, category=None):
+    return fetch_google_site_rss('rtvonline.com', 'rtv', 'আরটিভি (RTV)', 'RTV', '#ea580c', now_ts, category)
 
-def fetch_ittefaq_live(now_ts):
-    return fetch_google_site_rss('ittefaq.com.bd', 'ittefaq', 'দৈনিক ইত্তেফাক', 'Ittefaq', '#2563eb', now_ts)
+def fetch_ittefaq_live(now_ts, category=None):
+    return fetch_google_site_rss('ittefaq.com.bd', 'ittefaq', 'দৈনিক ইত্তেফাক', 'Ittefaq', '#2563eb', now_ts, category)
 
-def fetch_bdpratidin_live(now_ts):
-    return fetch_google_site_rss('bd-pratidin.com', 'bdpratidin', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a', now_ts)
+def fetch_bdpratidin_live(now_ts, category=None):
+    return fetch_google_site_rss('bd-pratidin.com', 'bdpratidin', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a', now_ts, category)
 
-def fetch_kalerkantho_live(now_ts):
-    return fetch_google_site_rss('kalerkantho.com', 'kalerkantho', 'কালের কণ্ঠ', 'Kaler Kantho', '#d97706', now_ts)
+def fetch_kalerkantho_live(now_ts, category=None):
+    return fetch_google_site_rss('kalerkantho.com', 'kalerkantho', 'কালের কণ্ঠ', 'Kaler Kantho', '#d97706', now_ts, category)
 
-def fetch_jugantor_live(now_ts):
-    return fetch_google_site_rss('jugantor.com', 'jugantor', 'দৈনিক যুগান্তর', 'Jugantor', '#9333ea', now_ts)
+def fetch_jugantor_live(now_ts, category=None):
+    return fetch_google_site_rss('jugantor.com', 'jugantor', 'দৈনিক যুগান্তর', 'Jugantor', '#9333ea', now_ts, category)
 
-def fetch_bdnews24_live(now_ts):
-    return fetch_google_site_rss('bangla.bdnews24.com', 'bdnews24', 'বিডিনিউজ টোয়েন্টিফোর', 'bdnews24', '#0891b2', now_ts)
+def fetch_bdnews24_live(now_ts, category=None):
+    return fetch_google_site_rss('bangla.bdnews24.com', 'bdnews24', 'বিডিনিউজ টোয়েন্টিফোর', 'bdnews24', '#0891b2', now_ts, category)
 
 
 def load_pristine_catalog():
@@ -588,13 +643,26 @@ def get_news(
         'bdnews24': fetch_bdnews24_live
     }
 
+    def run_scraper(fn, s_id):
+        try:
+            # Check if function accepts category
+            import inspect
+            sig = inspect.signature(fn)
+            if 'category' in sig.parameters:
+                return fn(now_ts, category=category)
+            return fn(now_ts)
+        except Exception:
+            try:
+                return fn(now_ts)
+            except Exception:
+                return []
+
     if source and source != 'all' and source in fetch_map:
-        news.extend(fetch_map[source](now_ts))
+        news.extend(run_scraper(fetch_map[source], source))
     else:
-        # Run all scrapers concurrently with a strict 4.5s overall timeout
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_source = {executor.submit(fn, now_ts): s_id for s_id, fn in fetch_map.items()}
-            done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=3.2)
+            future_to_source = {executor.submit(run_scraper, fn, s_id): s_id for s_id, fn in fetch_map.items()}
+            done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=3.5)
             for future in done:
                 try:
                     res_items = future.result()
@@ -1090,12 +1158,22 @@ def get_client_ip(request_headers, client_host=None):
     return client_host or "127.0.0.1"
 
 def read_persisted_visitor_stats():
-    # Try reading from raw GitHub storage
+    import base64
+    # 1. Read directly from GitHub API (always fresh, zero CDN cache)
     try:
-        raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{VISITOR_STATS_PATH}?_t={int(time.time())}"
-        req = urllib.request.Request(raw_url, headers={"User-Agent": "NewsBanglaBackend"})
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{VISITOR_STATS_PATH}?_t={int(time.time())}"
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "NewsBanglaBackend"
+        })
         with urllib.request.urlopen(req, timeout=4) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            data = json.loads(resp.read().decode("utf-8"))
+            if data and "content" in data:
+                decoded = base64.b64decode(data["content"]).decode("utf-8")
+                stats_obj = json.loads(decoded)
+                stats_obj["_sha"] = data.get("sha")
+                return stats_obj
     except Exception:
         pass
 
@@ -1128,14 +1206,15 @@ def save_persisted_visitor_stats(stats):
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "NewsBanglaBackend"
         }
-        sha = None
-        try:
-            get_req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(get_req, timeout=5) as r:
-                res_data = json.loads(r.read().decode("utf-8"))
-                sha = res_data.get("sha")
-        except Exception:
-            pass
+        sha = stats.pop("_sha", None)
+        if not sha:
+            try:
+                get_req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(get_req, timeout=4) as r:
+                    res_data = json.loads(r.read().decode("utf-8"))
+                    sha = res_data.get("sha")
+            except Exception:
+                pass
 
         content_bytes = json.dumps(stats, ensure_ascii=False, indent=2).encode("utf-8")
         content_b64 = base64.b64encode(content_bytes).decode("utf-8")
@@ -1206,12 +1285,10 @@ def record_visitor(request: Request = None):
         ip_set = ip_set[-2000:]
     stats["ip_hash_set"] = ip_set
 
-    # Save async or on every few hits to avoid spamming GitHub API
-    if stats["total_pageviews"] % 3 == 0:
-        try:
-            save_persisted_visitor_stats(stats)
-        except Exception:
-            pass
+    try:
+        save_persisted_visitor_stats(stats)
+    except Exception as e:
+        print("Record stats save error:", e)
 
     return {
         "status": "success",
