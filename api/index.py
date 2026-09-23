@@ -351,26 +351,27 @@ def fetch_prothomalo_live(now_ts):
     except Exception:
         pass
 
-    # Enrich top 6 items with real og:image and paragraphs concurrently
+    # Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
-        if item.get("image") and item.get("paragraphs"):
-            return item
-        try:
-            art = get_article(item["link"], item["source_id"], item["title"])
-            if art.get("image"):
-                item["image"] = art["image"]
-            if art.get("paragraphs"):
-                item["paragraphs"] = art["paragraphs"]
-        except Exception:
-            pass
+        # Even if feed_img was extracted, if it's missing or generic, fetch original CDN image & paragraphs
+        if not item.get("image") or not item["image"].strip() or not item.get("paragraphs"):
+            try:
+                art = get_article(item["link"], item["source_id"], item["title"])
+                if art.get("image") and art["image"].startswith("http"):
+                    item["image"] = art["image"]
+                if art.get("paragraphs"):
+                    item["paragraphs"] = art["paragraphs"]
+            except Exception:
+                pass
         if not item.get("image") or not item["image"].strip():
             item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        top_slice = candidates[:8]
-        rest_slice = candidates[8:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        # Enrich the top 10 articles concurrently with real CDN images and full paragraphs
+        top_slice = candidates[:10]
+        rest_slice = candidates[10:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
             enriched_top = list(ex.map(enrich_item, top_slice))
         for it in rest_slice:
             if not it.get("image"):
@@ -424,26 +425,27 @@ def fetch_bbc_live(now_ts):
     except Exception:
         pass
 
-    # Enrich top 6 items with real og:image and paragraphs concurrently
+    # Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
-        if item.get("image") and item.get("paragraphs"):
-            return item
-        try:
-            art = get_article(item["link"], item["source_id"], item["title"])
-            if art.get("image"):
-                item["image"] = art["image"]
-            if art.get("paragraphs"):
-                item["paragraphs"] = art["paragraphs"]
-        except Exception:
-            pass
+        # Even if feed_img was extracted, if it's missing or generic, fetch original CDN image & paragraphs
+        if not item.get("image") or not item["image"].strip() or not item.get("paragraphs"):
+            try:
+                art = get_article(item["link"], item["source_id"], item["title"])
+                if art.get("image") and art["image"].startswith("http"):
+                    item["image"] = art["image"]
+                if art.get("paragraphs"):
+                    item["paragraphs"] = art["paragraphs"]
+            except Exception:
+                pass
         if not item.get("image") or not item["image"].strip():
             item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        top_slice = candidates[:8]
-        rest_slice = candidates[8:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        # Enrich the top 10 articles concurrently with real CDN images and full paragraphs
+        top_slice = candidates[:10]
+        rest_slice = candidates[10:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
             enriched_top = list(ex.map(enrich_item, top_slice))
         for it in rest_slice:
             if not it.get("image"):
@@ -653,26 +655,27 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
     except Exception:
         pass
 
-    # Enrich top 6 items with real og:image and paragraphs concurrently
+    # Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
-        if item.get("image") and item.get("paragraphs"):
-            return item
-        try:
-            art = get_article(item["link"], item["source_id"], item["title"])
-            if art.get("image"):
-                item["image"] = art["image"]
-            if art.get("paragraphs"):
-                item["paragraphs"] = art["paragraphs"]
-        except Exception:
-            pass
+        # Even if feed_img was extracted, if it's missing or generic, fetch original CDN image & paragraphs
+        if not item.get("image") or not item["image"].strip() or not item.get("paragraphs"):
+            try:
+                art = get_article(item["link"], item["source_id"], item["title"])
+                if art.get("image") and art["image"].startswith("http"):
+                    item["image"] = art["image"]
+                if art.get("paragraphs"):
+                    item["paragraphs"] = art["paragraphs"]
+            except Exception:
+                pass
         if not item.get("image") or not item["image"].strip():
             item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        top_slice = candidates[:8]
-        rest_slice = candidates[8:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        # Enrich the top 10 articles concurrently with real CDN images and full paragraphs
+        top_slice = candidates[:10]
+        rest_slice = candidates[10:]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
             enriched_top = list(ex.map(enrich_item, top_slice))
         for it in rest_slice:
             if not it.get("image"):
