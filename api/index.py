@@ -47,7 +47,9 @@ def is_video_or_bulletin(t):
         r'(সকাল|দুপুর|সন্ধ্যা|রাত|রাতের|দিনের)\s*(৭|৮|৯|১০|১১|১২|১|২|৩|৪|৫|৬|\d+)\s*টার\s*(সংবাদ|বুলেটিন|খবর)',
         r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'সংবাদ\s*সারসংক্ষেপ',
         r'লাইভ\s*আপডেট', r'সরাসরি\s*দেখুন', r'টকশো', r'টক\s*শো',
-        r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+'
+        r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+',
+        r'video\s*gallery', r'photo\s*gallery', r'ভিডিও\s*গ্যালারি', r'ফটো\s*গ্যালারি',
+        r'(সকালের|দুপুরের|মধ্যাহ্নের|সন্ধ্যার|রাতের)\s*খবর'
     ]
     for pat in video_patterns:
         if re.search(pat, t, re.IGNORECASE):
@@ -82,7 +84,9 @@ def is_clean_headline(t, u=""):
         r'(সকাল|দুপুর|সন্ধ্যা|রাত|রাতের|দিনের)\s*(৭|৮|৯|১০|১১|১২|১|২|৩|৪|৫|৬|\d+)\s*টার\s*(সংবাদ|বুলেটিন|খবর)',
         r'সংবাদ\s*বুলেটিন', r'সরাসরি\s*সংবাদ', r'লাইভ\s*সংবাদ', r'সংবাদ\s*সারসংক্ষেপ',
         r'লাইভ\s*আপডেট', r'সরাসরি\s*দেখুন', r'টকশো', r'টক\s*শো',
-        r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+'
+        r'স্বাস্থ্য\s*প্রতিদিন', r'সংলাপ\s*প্রতিদিন', r'চাওয়া[- ]পাওয়া', r'পর্ব[- ]\s*\d+',
+        r'video\s*gallery', r'photo\s*gallery', r'ভিডিও\s*গ্যালারি', r'ফটো\s*গ্যালারি',
+        r'(সকালের|দুপুরের|মধ্যাহ্নের|সন্ধ্যার|রাতের)\s*খবর'
     ]
     for pat in video_patterns:
         if re.search(pat, t, re.IGNORECASE):
@@ -236,7 +240,7 @@ def extract_full_article(url):
 
             # Extract authentic high-res news image
             og_img = soup.find('meta', property='og:image')
-            if og_img and og_img.get('content') and og_img['content'].startswith('http'):
+            if og_img and og_img.get('content') and og_img['content'].startswith('http') and not any(k in og_img['content'].lower() for k in ['facebook.com/tr', 'pixel', 'logo']):
                 image = og_img['content'].strip()
             if not image:
                 tw_img = soup.find('meta', attrs={'name': 'twitter:image'})
@@ -464,6 +468,105 @@ BRAND_HD_IMAGES = {
     'jugantor': 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800&auto=format&fit=crop&q=80',
     'bdnews24': 'https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&auto=format&fit=crop&q=80'
 }
+
+def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
+    paras = []
+    title = ""
+    image = ""
+    real_url = url
+
+    # Decode Google News redirect if needed
+    if 'news.google.com' in real_url:
+        try:
+            from googlenewsdecoder import gnewsdecoder
+            res = gnewsdecoder(real_url)
+            if (res.get('status') or res.get('success')) and res.get('decoded_url'):
+                real_url = res['decoded_url']
+        except Exception:
+            try:
+                from googlenewsdecoder import new_decoderv1
+                res = new_decoderv1(real_url)
+                if res.get('status') and res.get('decoded_url'):
+                    real_url = res['decoded_url']
+            except Exception:
+                pass
+
+    ua_list = [
+        'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    ]
+
+    html_content = ""
+    for ua in ua_list:
+        try:
+            req = urllib.request.Request(real_url, headers={
+                'User-Agent': ua,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8'
+            })
+            with urllib.request.urlopen(req, timeout=4) as r:
+                html_content = r.read().decode('utf-8', errors='ignore')
+                if html_content and len(html_content) > 500:
+                    break
+        except Exception:
+            continue
+
+    if html_content:
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Title extraction
+            og_title = soup.find('meta', property='og:title')
+            if og_title and og_title.get('content'):
+                title = og_title['content'].strip()
+            if not title:
+                h1 = soup.find('h1')
+                if h1: title = h1.get_text(strip=True)
+
+            # High-resolution news image extraction
+            og_img = soup.find('meta', property='og:image')
+            if og_img and og_img.get('content') and og_img['content'].startswith('http') and not any(k in og_img['content'].lower() for k in ['facebook.com/tr', 'pixel', 'logo']):
+                image = og_img['content'].strip()
+            if not image:
+                tw_img = soup.find('meta', attrs={'name': 'twitter:image'})
+                if tw_img and tw_img.get('content') and tw_img['content'].startswith('http'):
+                    image = tw_img['content'].strip()
+            if not image:
+                for img in soup.find_all('img'):
+                    src = img.get('src') or img.get('data-src') or ''
+                    if src.startswith('http') and not any(k in src.lower() for k in ['logo', 'icon', 'advert', 'ad.', 'banner', 'share', 'avatar']):
+                        image = src
+                        break
+
+            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript', 'button']):
+                tag.decompose()
+
+            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I))
+            search_scope = article_body if article_body else soup
+
+            seen_paras = set()
+            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন', 'পড়তে ক্লিক করুন']
+
+            for p in search_scope.find_all('p'):
+                txt = p.get_text(strip=True)
+                if len(txt) > 22 and not is_video_or_bulletin(txt):
+                    if re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
+                        continue
+                    if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
+                        seen_paras.add(txt)
+                        paras.append(txt)
+        except Exception:
+            pass
+
+    return {
+        "title": title or title_hint or "",
+        "image": image,
+        "paragraphs": paras[:35]
+    }
+
+
+
 
 def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, category=None):
     candidates = []
@@ -986,103 +1089,6 @@ def serve_article_image(article_id: str):
 
 
 @app.get("/api/article")
-def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
-    paras = []
-    title = ""
-    image = ""
-    real_url = url
-
-    # Decode Google News redirect if needed
-    if 'news.google.com' in real_url:
-        try:
-            from googlenewsdecoder import gnewsdecoder
-            res = gnewsdecoder(real_url)
-            if (res.get('status') or res.get('success')) and res.get('decoded_url'):
-                real_url = res['decoded_url']
-        except Exception:
-            try:
-                from googlenewsdecoder import new_decoderv1
-                res = new_decoderv1(real_url)
-                if res.get('status') and res.get('decoded_url'):
-                    real_url = res['decoded_url']
-            except Exception:
-                pass
-
-    ua_list = [
-        'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    ]
-
-    html_content = ""
-    for ua in ua_list:
-        try:
-            req = urllib.request.Request(real_url, headers={
-                'User-Agent': ua,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8'
-            })
-            with urllib.request.urlopen(req, timeout=4) as r:
-                html_content = r.read().decode('utf-8', errors='ignore')
-                if html_content and len(html_content) > 500:
-                    break
-        except Exception:
-            continue
-
-    if html_content:
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Title extraction
-            og_title = soup.find('meta', property='og:title')
-            if og_title and og_title.get('content'):
-                title = og_title['content'].strip()
-            if not title:
-                h1 = soup.find('h1')
-                if h1: title = h1.get_text(strip=True)
-
-            # High-resolution news image extraction
-            og_img = soup.find('meta', property='og:image')
-            if og_img and og_img.get('content') and og_img['content'].startswith('http'):
-                image = og_img['content'].strip()
-            if not image:
-                tw_img = soup.find('meta', attrs={'name': 'twitter:image'})
-                if tw_img and tw_img.get('content') and tw_img['content'].startswith('http'):
-                    image = tw_img['content'].strip()
-            if not image:
-                for img in soup.find_all('img'):
-                    src = img.get('src') or img.get('data-src') or ''
-                    if src.startswith('http') and not any(k in src.lower() for k in ['logo', 'icon', 'advert', 'ad.', 'banner', 'share', 'avatar']):
-                        image = src
-                        break
-
-            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript', 'button']):
-                tag.decompose()
-
-            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I))
-            search_scope = article_body if article_body else soup
-
-            seen_paras = set()
-            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন', 'পড়তে ক্লিক করুন']
-
-            for p in search_scope.find_all('p'):
-                txt = p.get_text(strip=True)
-                if len(txt) > 22 and not is_video_or_bulletin(txt):
-                    if re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
-                        continue
-                    if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
-                        seen_paras.add(txt)
-                        paras.append(txt)
-        except Exception:
-            pass
-
-    return {
-        "title": title or title_hint or "",
-        "image": image,
-        "paragraphs": paras[:35]
-    }
-
-
 @app.get("/api/tts")
 async def tts_stream(text: str = Query(...)):
     clean = re.sub(r'https?://\S+', '', text)
