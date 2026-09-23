@@ -573,13 +573,13 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
                         seen_paras.add(txt)
                         paras.append(txt)
 
-            # Fallback if no paragraphs found in DOM: check og:description or meta description
-            if not paras:
+            # If still fewer than 2 paragraphs, check og:description, twitter:description, and meta description
+            if len(paras) < 2:
                 for meta_name in ['og:description', 'twitter:description', 'description']:
                     meta_tag = soup.find('meta', property=meta_name) or soup.find('meta', attrs={'name': meta_name})
                     if meta_tag and meta_tag.get('content'):
                         c_txt = meta_tag['content'].strip()
-                        if len(c_txt) > 20 and not any(sk in c_txt for sk in skip_keywords):
+                        if len(c_txt) > 20 and c_txt not in paras and not any(sk in c_txt for sk in skip_keywords):
                             paras.append(c_txt)
                             break
         except Exception:
