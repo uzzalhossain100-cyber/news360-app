@@ -3168,19 +3168,26 @@
         descP.innerText = 'এই বিষয়ে ' + item.source_name + '-এর বিশেষ সম্পাদকীয় ও মাঠপর্যায়ের সর্বশেষ তথ্য সংগ্রহ করা হয়েছে। সংবাদের পূর্ণাঙ্গ সংস্করণ, সংশ্লিষ্ট নথিপত্র ও অতিরিক্ত ভিডিও ফুটেজ সরাসরি মূল পোর্টালে প্রকাশিত হয়েছে। বিস্তারিত পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।';
         container.appendChild(descP);
 
-        // Try background fetch for live scraped paragraphs
+        // Try background fetch for live scraped paragraphs and real original CDN image
         fetch('/api/article?url=' + encodeURIComponent(item.link) + '&source_id=' + item.source_id + '&title_hint=' + encodeURIComponent(item.title))
           .then(res => res.json())
           .then(liveData => {
-            if (liveData && liveData.paragraphs && liveData.paragraphs.length > 0) {
-              container.innerHTML = '';
-              liveData.paragraphs.forEach(function(p) {
-                const pe = document.createElement('p');
-                pe.innerText = p;
-                container.appendChild(pe);
-              });
-              if (liveData.image) {
+            if (liveData) {
+              if (liveData.paragraphs && liveData.paragraphs.length > 0) {
+                item.paragraphs = liveData.paragraphs;
+                container.innerHTML = '';
+                liveData.paragraphs.forEach(function(p) {
+                  const pe = document.createElement('p');
+                  pe.innerText = p;
+                  container.appendChild(pe);
+                });
+              }
+              if (liveData.image && liveData.image.startsWith('http')) {
+                item.image = liveData.image;
                 modalImg.src = liveData.image;
+                // Also update the card image in grid if visible
+                const cardImgEl = document.querySelector(`[data-id="${item.id}"] img.card-img`);
+                if (cardImgEl) cardImgEl.src = liveData.image;
               }
             }
           })

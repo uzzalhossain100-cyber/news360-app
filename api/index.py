@@ -555,14 +555,26 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
             seen_paras = set()
             skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন', 'পড়তে ক্লিক করুন']
 
-            for p in search_scope.find_all('p'):
+            for p in search_scope.find_all(['p', 'div']):
+                if p.name == 'div' and p.find_all('p'):
+                    continue  # skip parent divs that contain p
                 txt = p.get_text(strip=True)
-                if len(txt) > 22 and not is_video_or_bulletin(txt):
+                if len(txt) > 24 and not is_video_or_bulletin(txt):
                     if re.match(r'^(প্রকাশ|প্রিন্ট|অনলাইন|আপডেট)\s*:\s*[০-৯\d]', txt):
                         continue
                     if txt not in seen_paras and not any(sk in txt for sk in skip_keywords):
                         seen_paras.add(txt)
                         paras.append(txt)
+
+            # Fallback if no paragraphs found in DOM: check og:description or meta description
+            if not paras:
+                for meta_name in ['og:description', 'twitter:description', 'description']:
+                    meta_tag = soup.find('meta', property=meta_name) or soup.find('meta', attrs={'name': meta_name})
+                    if meta_tag and meta_tag.get('content'):
+                        c_txt = meta_tag['content'].strip()
+                        if len(c_txt) > 20 and not any(sk in c_txt for sk in skip_keywords):
+                            paras.append(c_txt)
+                            break
         except Exception:
             pass
 
