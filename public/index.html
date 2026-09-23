@@ -2654,7 +2654,7 @@
 
       try {
         const cacheBuster = Date.now();
-        let url = '/api/news?limit=300&force_refresh=' + (isManualUserRefresh ? 'true' : 'false') + '&_cb=' + cacheBuster;
+        let url = '/api/news?limit=150&force_refresh=' + (isManualUserRefresh ? 'true' : 'false') + '&_cb=' + cacheBuster;
         if (targetCategory && targetCategory !== 'all') {
           url += '&category=' + encodeURIComponent(targetCategory);
         }
@@ -2663,7 +2663,7 @@
         }
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 9000);
         const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
         if (resp.ok) {
@@ -2676,9 +2676,27 @@
         console.warn('Backend live fetch err:', err);
       }
 
+      // Fallback: If backend returns empty, fetch direct RSS
+      if (freshItems.length === 0) {
+        try {
+          const direct = await fetchDirectRssFeeds();
+          if (direct && direct.length > 0) {
+            freshItems = direct.filter(it => {
+              const matchCat = (targetCategory === 'all' || it.category === targetCategory);
+              const matchSrc = (targetSource === 'all' || it.source_id === targetSource);
+              return matchCat && matchSrc && !isVideoOrNonNewsContent(it);
+            });
+          }
+        } catch(e) {
+          console.warn('Direct RSS fallback err:', e);
+        }
+      }
+
+      let addedCount = 0;
+      const prevScrollY = window.scrollY;
+
       if (freshItems.length > 0) {
         const currentLinkSet = new Set(allNewsItems.map(it => it.link));
-        let addedCount = 0;
 
         freshItems.forEach(it => {
           if (!currentLinkSet.has(it.link)) {
@@ -2705,8 +2723,6 @@
           }
         });
 
-        const prevScrollY = window.scrollY;
-
         renderNewsGrid();
         updateTicker();
 
@@ -2714,36 +2730,33 @@
         const timeString = now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
         const timeElem = document.getElementById('lastUpdatedTime');
         if (timeElem) timeElem.innerText = 'সর্বশেষ আপডেট: ' + timeString;
+      }
 
-        // User Constraint:
-        // "আর 5 মিনিট পর পর অটো রিফ্রেশ হবে কিন্তু পাঠক স্ক্রল করে যেখানে আছে সেখানেই থাকবে শুধু নতুন খবর যোগ হবে।
-        //  আর পাঠক যখন নিজে রিফ্রেশ করবে তখন রিফ্রেশ হয়ে স্ক্রল উপরে যাবে।"
-        if (isManualUserRefresh) {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Handling user feedback and scrolling
+      if (isManualUserRefresh) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
 
-          // "আর যতগুলো খবর নতুন যুক্ত হবে সেই মেসেজ দিবে।"
-          let msg = '';
-          const contextLabel = (targetSource !== 'all' ? sourceLabel : '') +
-                               (targetSource !== 'all' && targetCategory !== 'all' ? ' (' + catLabel + ')' : (targetCategory !== 'all' ? catLabel : ''));
-          
-          if (addedCount > 0) {
-            if (contextLabel) {
-              msg = '✓ ' + contextLabel + '-এ ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!';
-            } else {
-              msg = '✓ ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!';
-            }
+        const contextLabel = (targetSource !== 'all' ? sourceLabel : '') +
+                             (targetSource !== 'all' && targetCategory !== 'all' ? ' (' + catLabel + ')' : (targetCategory !== 'all' ? catLabel : ''));
+        
+        let msg = '';
+        if (addedCount > 0) {
+          if (contextLabel) {
+            msg = '✓ ' + contextLabel + '-এ ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!';
           } else {
-            if (contextLabel) {
-              msg = '✓ ' + contextLabel + '-এর সকল খবর হালনাগাদ রয়েছে (নতুন কোনো খবর আসেনি)';
-            } else {
-              msg = '✓ সকল খবর হালনাগাদ রয়েছে';
-            }
+            msg = '✓ ' + bnDigits(addedCount) + 'টি নতুন খবর যুক্ত হয়েছে!';
           }
-          showToast(msg);
         } else {
-          // Automatic 5-minute background refresh: user stays exactly where they were scrolling!
-          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+          if (contextLabel) {
+            msg = '✓ ' + contextLabel + '-এর সকল খবর হালনাগাদ রয়েছে (নতুন কোনো খবর আসেনি)';
+          } else {
+            msg = '✓ সকল খবর হালনাগাদ রয়েছে';
+          }
         }
+        showToast(msg);
+      } else {
+        // Automatic background refresh: keep reader exactly where they are!
+        window.scrollTo({ top: prevScrollY, behavior: 'instant' });
       }
 
       if (refreshBtn) {
@@ -4102,8 +4115,22 @@
     // Dynamic category/source refresh handler:
     // "এর উপর ক্লিক করলে যে পত্রিকার যে ক্যাটাগরিতে থাকবে সেই প্রত্রিকা ও ক্যাটাগরি রিফ্রেশ হবে নতুন খবর যোগ হবে।"
     function handleCurrentCategoryRefresh() {
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) {
+        refreshBtn.classList.add('refreshing');
+        const svg = refreshBtn.querySelector('svg');
+        if (svg) svg.style.animation = 'spin 0.6s linear infinite';
+      }
       integrateCustomArticles();
-      loadNews(true);
+      loadNews(true).catch(function(err) {
+        console.error('Refresh error:', err);
+      }).finally(function() {
+        if (refreshBtn) {
+          const svg = refreshBtn.querySelector('svg');
+          if (svg) svg.style.animation = 'none';
+          refreshBtn.classList.remove('refreshing');
+        }
+      });
     }
 
   </script>
