@@ -2809,14 +2809,9 @@
       const empty = document.getElementById('emptyState');
       grid.innerHTML = '';
 
-      // Auto-remove any news older than 24 hours (86,400 seconds)
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const cutoff24h = nowSeconds - (24 * 3600);
-
       let items = allNewsItems.filter(function(item) {
         if (isNonNewsHeadline(item.title)) return false;
-        if (!item.timestamp) return true;
-        return item.timestamp >= cutoff24h;
+        return true;
       });
 
       // Filter by newspaper source
