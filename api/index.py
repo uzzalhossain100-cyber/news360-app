@@ -549,7 +549,14 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
             for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'noscript', 'button']):
                 tag.decompose()
 
-            article_body = soup.find(['article', 'main']) or soup.find('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I))
+            # Extract paragraphs across the document (skipping scripts, nav, headers, and footer)
+            # If an article body container with multiple paragraphs is found, prioritize it; otherwise use soup
+            article_body = soup.find(['article', 'main'])
+            if not article_body or len(article_body.find_all('p')) < 2:
+                for candidate_div in soup.find_all('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I)):
+                    if len(candidate_div.find_all('p')) >= 2:
+                        article_body = candidate_div
+                        break
             search_scope = article_body if article_body else soup
 
             seen_paras = set()
