@@ -475,6 +475,7 @@ BRAND_HD_IMAGES = {
     'bdnews24': 'https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&auto=format&fit=crop&q=80'
 }
 
+@app.get("/api/article")
 def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
     paras = []
     title = ""
@@ -1097,7 +1098,6 @@ def serve_article_image(article_id: str):
     return Response(status_code=302, headers={"Location": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"})
 
 
-@app.get("/api/article")
 @app.get("/api/tts")
 async def tts_stream(text: str = Query(...)):
     clean = re.sub(r'https?://\S+', '', text)
