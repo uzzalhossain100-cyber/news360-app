@@ -1444,7 +1444,7 @@
         </div>
         <div class="brand-text">
           <h1>News<span style="color:#e11d48;">Bangla</span> <span class="badge-live">লাইভ</span></h1>
-          <span style="font-size:11px; font-weight:700; color:var(--text-muted); display:block; margin-top:-3px; letter-spacing:0.4px;">নিউজ বাংলা ২৪/৭</span>
+          <span id="headerCurrentBengaliDate" style="font-size:11px; font-weight:700; color:var(--text-muted); display:block; margin-top:-3px; letter-spacing:0.3px;">বৃহস্পতিবার, ২৪ সেপ্টেম্বর ২০২৬</span>
         </div>
       </div>
 
@@ -2427,7 +2427,31 @@
     }
 
     // Initialize
+    function updateHeaderBengaliDate() {
+      try {
+        const days = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+        const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+        const toBn = n => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+        
+        // BD local time
+        const now = new Date();
+        const bdNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
+        const dayName = days[bdNow.getDay()];
+        const dateNum = toBn(bdNow.getDate());
+        const monthName = months[bdNow.getMonth()];
+        const yearNum = toBn(bdNow.getFullYear());
+        
+        const el = document.getElementById('headerCurrentBengaliDate');
+        if (el) {
+          el.innerText = dayName + ', ' + dateNum + ' ' + monthName + ' ' + yearNum;
+        }
+      } catch(e) {
+        console.warn('Date render err:', e);
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+      updateHeaderBengaliDate();
       if (localStorage.getItem('theme') === 'dark') {
         document.body.setAttribute('data-theme', 'dark');
         updateThemeIcon(true);
@@ -2631,7 +2655,7 @@
         }
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
         const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
         if (resp.ok) {

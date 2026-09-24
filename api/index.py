@@ -368,11 +368,14 @@ def fetch_prothomalo_live(now_ts):
         return item
 
     if candidates:
-        # Enrich the top 10 articles concurrently with real CDN images and full paragraphs
-        top_slice = candidates[:10]
-        rest_slice = candidates[10:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-            enriched_top = list(ex.map(enrich_item, top_slice))
+        # Fast enrich top items so get_news returns rapidly with high volume of articles
+        top_slice = candidates[:4]
+        rest_slice = candidates[4:]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                enriched_top = list(ex.map(enrich_item, top_slice))
+        except Exception:
+            enriched_top = top_slice
         for it in rest_slice:
             if not it.get("image"):
                 it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
@@ -442,11 +445,14 @@ def fetch_bbc_live(now_ts):
         return item
 
     if candidates:
-        # Enrich the top 10 articles concurrently with real CDN images and full paragraphs
-        top_slice = candidates[:10]
-        rest_slice = candidates[10:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-            enriched_top = list(ex.map(enrich_item, top_slice))
+        # Fast enrich top items so get_news returns rapidly with high volume of articles
+        top_slice = candidates[:4]
+        rest_slice = candidates[4:]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                enriched_top = list(ex.map(enrich_item, top_slice))
+        except Exception:
+            enriched_top = top_slice
         for it in rest_slice:
             if not it.get("image"):
                 it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
@@ -672,11 +678,14 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
         return item
 
     if candidates:
-        # Enrich the top 10 articles concurrently with real CDN images and full paragraphs
-        top_slice = candidates[:10]
-        rest_slice = candidates[10:]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-            enriched_top = list(ex.map(enrich_item, top_slice))
+        # Fast enrich top items so get_news returns rapidly with high volume of articles
+        top_slice = candidates[:4]
+        rest_slice = candidates[4:]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                enriched_top = list(ex.map(enrich_item, top_slice))
+        except Exception:
+            enriched_top = top_slice
         for it in rest_slice:
             if not it.get("image"):
                 it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
@@ -869,7 +878,7 @@ def get_news(
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_source = {executor.submit(run_scraper, fn, s_id): s_id for s_id, fn in fetch_map.items()}
-            done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=3.5)
+            done, not_done = concurrent.futures.wait(future_to_source.keys(), timeout=5.5)
             for future in done:
                 try:
                     res_items = future.result()
