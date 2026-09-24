@@ -351,28 +351,32 @@ def fetch_prothomalo_live(now_ts):
     except Exception:
         pass
 
-    # Enrich items with real og:image and paragraphs concurrently
+    # 1. Filter out non-news, e-magazines, and unwanted placeholders
+    candidates = [c for c in candidates if not any(k in c['title'].lower() for k in ['revalidate', 'emagazine', 'e-paper', 'ই-পেপার', 'বিজ্ঞাপন', 'highest circulated newspaper', 'bangladesh pratidin ||', 'kalerkantho ||', 'পত্রিকা ২০', 'পত্রিকা 20'])]
+
+    # 2. Sort candidates chronologically FIRST so the freshest news gets enriched
+    candidates.sort(key=lambda x: x.get('timestamp') or 0, reverse=True)
+
+    # 3. Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
-        # Even if feed_img was extracted, if it's missing or generic, fetch original CDN image & paragraphs
-        if not item.get("image") or not item["image"].strip() or not item.get("paragraphs"):
-            try:
-                art = get_article(item["link"], item["source_id"], item["title"])
-                if art.get("image") and art["image"].startswith("http"):
-                    item["image"] = art["image"]
-                if art.get("paragraphs"):
-                    item["paragraphs"] = art["paragraphs"]
-            except Exception:
-                pass
+        try:
+            art = get_article(item["link"], item["source_id"], item["title"])
+            if art.get("image") and art["image"].startswith("http"):
+                item["image"] = art["image"]
+            if art.get("paragraphs") and len(art["paragraphs"]) > 0:
+                item["paragraphs"] = art["paragraphs"]
+        except Exception:
+            pass
         if not item.get("image") or not item["image"].strip():
             item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        # Fast enrich top items so get_news returns rapidly with high volume of articles
-        top_slice = candidates[:4]
-        rest_slice = candidates[4:]
+        # Enrich the top 8 freshest news items concurrently with real CDN images & full paragraphs
+        top_slice = candidates[:8]
+        rest_slice = candidates[8:]
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
                 enriched_top = list(ex.map(enrich_item, top_slice))
         except Exception:
             enriched_top = top_slice
@@ -428,28 +432,32 @@ def fetch_bbc_live(now_ts):
     except Exception:
         pass
 
-    # Enrich items with real og:image and paragraphs concurrently
+    # 1. Filter out non-news, e-magazines, and unwanted placeholders
+    candidates = [c for c in candidates if not any(k in c['title'].lower() for k in ['revalidate', 'emagazine', 'e-paper', 'ই-পেপার', 'বিজ্ঞাপন', 'highest circulated newspaper', 'bangladesh pratidin ||', 'kalerkantho ||', 'পত্রিকা ২০', 'পত্রিকা 20'])]
+
+    # 2. Sort candidates chronologically FIRST so the freshest news gets enriched
+    candidates.sort(key=lambda x: x.get('timestamp') or 0, reverse=True)
+
+    # 3. Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
-        # Even if feed_img was extracted, if it's missing or generic, fetch original CDN image & paragraphs
-        if not item.get("image") or not item["image"].strip() or not item.get("paragraphs"):
-            try:
-                art = get_article(item["link"], item["source_id"], item["title"])
-                if art.get("image") and art["image"].startswith("http"):
-                    item["image"] = art["image"]
-                if art.get("paragraphs"):
-                    item["paragraphs"] = art["paragraphs"]
-            except Exception:
-                pass
+        try:
+            art = get_article(item["link"], item["source_id"], item["title"])
+            if art.get("image") and art["image"].startswith("http"):
+                item["image"] = art["image"]
+            if art.get("paragraphs") and len(art["paragraphs"]) > 0:
+                item["paragraphs"] = art["paragraphs"]
+        except Exception:
+            pass
         if not item.get("image") or not item["image"].strip():
             item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        # Fast enrich top items so get_news returns rapidly with high volume of articles
-        top_slice = candidates[:4]
-        rest_slice = candidates[4:]
+        # Enrich the top 8 freshest news items concurrently with real CDN images & full paragraphs
+        top_slice = candidates[:8]
+        rest_slice = candidates[8:]
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
                 enriched_top = list(ex.map(enrich_item, top_slice))
         except Exception:
             enriched_top = top_slice
@@ -661,28 +669,32 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
     except Exception:
         pass
 
-    # Enrich items with real og:image and paragraphs concurrently
+    # 1. Filter out non-news, e-magazines, and unwanted placeholders
+    candidates = [c for c in candidates if not any(k in c['title'].lower() for k in ['revalidate', 'emagazine', 'e-paper', 'ই-পেপার', 'বিজ্ঞাপন', 'highest circulated newspaper', 'bangladesh pratidin ||', 'kalerkantho ||', 'পত্রিকা ২০', 'পত্রিকা 20'])]
+
+    # 2. Sort candidates chronologically FIRST so the freshest news gets enriched
+    candidates.sort(key=lambda x: x.get('timestamp') or 0, reverse=True)
+
+    # 3. Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
-        # Even if feed_img was extracted, if it's missing or generic, fetch original CDN image & paragraphs
-        if not item.get("image") or not item["image"].strip() or not item.get("paragraphs"):
-            try:
-                art = get_article(item["link"], item["source_id"], item["title"])
-                if art.get("image") and art["image"].startswith("http"):
-                    item["image"] = art["image"]
-                if art.get("paragraphs"):
-                    item["paragraphs"] = art["paragraphs"]
-            except Exception:
-                pass
+        try:
+            art = get_article(item["link"], item["source_id"], item["title"])
+            if art.get("image") and art["image"].startswith("http"):
+                item["image"] = art["image"]
+            if art.get("paragraphs") and len(art["paragraphs"]) > 0:
+                item["paragraphs"] = art["paragraphs"]
+        except Exception:
+            pass
         if not item.get("image") or not item["image"].strip():
             item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
         return item
 
     if candidates:
-        # Fast enrich top items so get_news returns rapidly with high volume of articles
-        top_slice = candidates[:4]
-        rest_slice = candidates[4:]
+        # Enrich the top 8 freshest news items concurrently with real CDN images & full paragraphs
+        top_slice = candidates[:8]
+        rest_slice = candidates[8:]
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
                 enriched_top = list(ex.map(enrich_item, top_slice))
         except Exception:
             enriched_top = top_slice
