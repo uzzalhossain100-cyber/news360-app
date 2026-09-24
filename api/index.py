@@ -718,7 +718,15 @@ def fetch_ittefaq_live(now_ts, category=None):
     return fetch_google_site_rss('ittefaq.com.bd', 'ittefaq', 'দৈনিক ইত্তেফাক', 'Ittefaq', '#2563eb', now_ts, category)
 
 def fetch_bdpratidin_live(now_ts, category=None):
-    return fetch_google_site_rss('bd-pratidin.com', 'bdpratidin', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a', now_ts, category)
+    items = fetch_google_site_rss('bd-pratidin.com/national', 'bdpratidin', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a', now_ts, category)
+    if len(items) < 10:
+        more = fetch_google_site_rss('bd-pratidin.com', 'bdpratidin', 'বাংলাদেশ প্রতিদিন', 'BD Pratidin', '#16a34a', now_ts, category)
+        seen_links = set(x['link'] for x in items)
+        for m in more:
+            if m['link'] not in seen_links:
+                seen_links.add(m['link'])
+                items.append(m)
+    return items
 
 def fetch_kalerkantho_live(now_ts, category=None):
     return fetch_google_site_rss('kalerkantho.com', 'kalerkantho', 'কালের কণ্ঠ', 'Kaler Kantho', '#d97706', now_ts, category)
