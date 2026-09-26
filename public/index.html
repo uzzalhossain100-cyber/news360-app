@@ -2664,25 +2664,52 @@
 
       let freshItems = [];
 
-      // 1. Fetch from live API with specific category filter if active
+      // 1. Fetch from live API: When 'all' is selected, query the main API and concurrently query all 10 newspaper sources
       try {
         const cacheBuster = Date.now();
-        let url = '/api/news?limit=300&force_refresh=true&_cb=' + cacheBuster;
-        if (targetCategory && targetCategory !== 'all') {
-          url += '&category=' + encodeURIComponent(targetCategory);
-        }
-        if (targetSource && targetSource !== 'all') {
-          url += '&source=' + encodeURIComponent(targetSource);
-        }
-        
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5500);
-        const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
-        clearTimeout(timeoutId);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.status === 'success' && Array.isArray(data.news) && data.news.length > 0) {
-            freshItems = data.news;
+        const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+        if (targetSource === 'all') {
+          // Concurrently fetch main API and specific newspaper streams so EVERY newspaper gets refreshed simultaneously!
+          const mainUrl = '/api/news?limit=250&force_refresh=true&_cb=' + cacheBuster + (targetCategory !== 'all' ? '&category=' + encodeURIComponent(targetCategory) : '');
+          const paperIds = ['prothomalo', 'bbc', 'kalerkantho', 'ittefaq', 'bdpratidin', 'jugantor', 'channel24', 'ntv', 'rtv', 'bdnews24'];
+          
+          const requests = [
+            fetch(mainUrl, { signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+            ...paperIds.map(pid => {
+              const pUrl = '/api/news?limit=20&force_refresh=true&source=' + pid + (targetCategory !== 'all' ? '&category=' + encodeURIComponent(targetCategory) : '') + '&_cb=' + cacheBuster;
+              return fetch(pUrl, { signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
+            })
+          ];
+
+          const results = await Promise.allSettled(requests);
+          clearTimeout(timeoutId);
+
+          const seenLinks = new Set();
+          results.forEach(res => {
+            if (res.status === 'fulfilled' && res.value && res.value.status === 'success' && Array.isArray(res.value.news)) {
+              res.value.news.forEach(item => {
+                if (item && item.link && !seenLinks.has(item.link)) {
+                  seenLinks.add(item.link);
+                  freshItems.push(item);
+                }
+              });
+            }
+          });
+        } else {
+          // Specific single source
+          let url = '/api/news?limit=150&force_refresh=true&source=' + encodeURIComponent(targetSource) + '&_cb=' + cacheBuster;
+          if (targetCategory && targetCategory !== 'all') {
+            url += '&category=' + encodeURIComponent(targetCategory);
+          }
+          const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+          clearTimeout(timeoutId);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.status === 'success' && Array.isArray(data.news)) {
+              freshItems = data.news;
+            }
           }
         }
       } catch (err) {
