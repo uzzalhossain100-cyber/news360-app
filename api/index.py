@@ -97,73 +97,88 @@ def detect_cat(title, url=""):
     u = (url or "").lower()
     t = (title or "").lower()
 
-    # 1. First priority: Direct URL category slugs (Newspapers structure URLs accurately)
+    # 1. URL Path Taxonomy (Newspapers structure categories in URL accurately)
     if any(k in u for k in ['/sports/', '/sport/', '/khela/', '/cricket/', '/football/', '/champions-trophy/', '/worldcup/']):
         return 'sports'
     if any(k in u for k in ['/entertainment/', '/binodon/', '/showbiz/', '/cinema/', '/glitz/']):
         return 'entertainment'
     if any(k in u for k in ['/tech/', '/technology/', '/it/', '/projukti/', '/gadget/']):
         return 'tech'
-    if any(k in u for k in ['/economy/', '/business/', '/arthoniti/', '/banijjo/', '/stock/']):
+    if any(k in u for k in ['/economy/', '/business/', '/arthoniti/', '/banijjo/', '/stock/', '/sharemarket/']):
         return 'economy'
     if any(k in u for k in ['/islamic-life/', '/islam/', '/religion/', '/dhormo/', '/islamic/']):
         return 'islamic'
-    if any(k in u for k in ['/international/', '/world/', '/bidesh/', '/prabash/']):
+    if any(k in u for k in ['/international/', '/world/', '/bidesh/', '/prabash/', '/middle-east/', '/asia/', '/america/', '/europe/']):
         return 'international'
+    if any(k in u for k in ['/bangladesh/', '/national/', '/country/', '/desh/', '/district/', '/capital/', '/politics/', '/shompadokiyo/']):
+        return 'national'
 
-    # 1.5 Islamic Life Priority Analysis
-    islamicWords = [
+    # 2. Islamic Life Taxonomy
+    islamic_words = [
         'কোরআন', 'হাদিস', 'ইসলাম', 'নামাজ', 'রোজা', 'রমজান', 'হজ', 'যাকাত', 'মসজিদ', 'মাদ্রাসা',
         'হাফেজ', 'হাফেজে কোরআন', 'ইমাম', 'মুয়াজ্জিন', 'সুন্নাহ', 'নবীজি', 'রাসুলুল্লাহ', 'মহানবী',
         'কোরআনে হাফেজ', 'পবিত্র মক্কা', 'মদিনা', 'ফতোয়া', 'জুম্মা', 'ইসলামিক', 'আলেম', 'ওলামা',
-        'দোয়া', 'আমল', 'সুরা', 'তাফসির', 'শরীয়ত', 'তাহাজ্জুদ', 'মুফতি', 'মাওলানা'
+        'দোয়া', 'আমল', 'সুরা', 'তাফসির', 'শরীয়ত', 'তাহাজ্জুদ', 'মুফতি', 'মাওলানা', 'রোজা', 'আযান'
     ]
-    for w in islamicWords:
-        if w in t: return 'islamic'
+    if any(w in t for w in islamic_words):
+        return 'islamic'
 
-    # 2. Strict Headline Keywords Analysis (Sports checked first so financial terms in sports don't misclassify)
-    sportsWords = [
+    # 3. Sports Taxonomy
+    sports_words = [
         'ক্রিকেট', 'ফুটবল', 'মেসি', 'রোনালদো', 'অধিনায়ক', 'বিশ্বকাপ', 'উইকেট', 'গোল', 'ম্যাচ',
-        'সিরিজ', 'বিসিবি', 'ফিফা', 'সাকিব', 'তামিম', 'বোলার', 'ব্যাটসম্যান', 'অলরাউন্ডার', 'টেনিস',
-        'টুর্নামেন্ট', 'খেলা', 'স্টেডিয়াম', 'হাফসেঞ্চুরি', 'সেঞ্চুরি', 'রানের জয়', 'রান তুলে',
+        'সিরিজ', 'বিসিবি', 'ফিফা', 'আইসিসি', 'সাকিব', 'তামিম', 'বোলার', 'ব্যাটসম্যান', 'অলরাউন্ডার', 'টেনিস',
+        'টুর্নামেন্ট', 'খেলা', 'স্টেডিয়াম', 'হাফসেঞ্চুরি', 'সেঞ্চুরি', 'রানের জয়', 'রান তুলে', 'টি-টোয়েন্টি', 'ওয়ানডে',
         'বিপিএল', 'আইপিএল', 'চ্যাম্পিয়ন্স ট্রফি', 'পেসার', 'স্পিনার', 'ডার্বি', 'লা লিগা', 'রিয়াল মাদ্রিদ',
-        'বার্সেলোনা', 'ম্যানচেস্টার', 'লিভারপুল', 'টাইগার', 'মুশফিক', 'শান্ত', 'মিরাজ', 'লিটন দাস', 'তাসকিন'
+        'বার্সেলোনা', 'ম্যানচেস্টার', 'লিভারপুল', 'টাইগার', 'মুশফিক', 'শান্ত', 'মিরাজ', 'লিটন দাস', 'তাসকিন',
+        'অ্যাথলেটিকস', 'অলিম্পিক', 'সুপার লিগ', 'পয়েন্ট টেবিল'
     ]
-    for w in sportsWords:
-        if w in t: return 'sports'
+    if any(w in t for w in sports_words):
+        return 'sports'
 
-    entWords = [
+    # 4. Entertainment Taxonomy
+    ent_words = [
         'সিনেমা', 'নাটক', 'চলচ্চিত্র', 'হলিউড', 'বলিউড', 'ঢালিউড', 'শাকিব খান', 'তারকা', 'বিনোদন',
         'মিউজিক ভিডিও', 'ফিল্ম', 'কনসার্ট', 'গায়িকা', 'গায়ক', 'ওটিটি', 'নায়ক', 'নায়িকা', 'অভিনেতা',
-        'অভিনেত্রী', 'গান', 'অ্যালবাম', 'গীতিকার', 'সুরকার', 'পরিচালক', 'শুটিং', 'রিলিজ', 'ট্রেলার', 'টিজার'
+        'অভিনেত্রী', 'গান', 'অ্যালবাম', 'গীতিকার', 'সুরকার', 'পরিচালক', 'শুটিং', 'রিলিজ', 'ট্রেলার', 'টিজার',
+        'সেলিব্রেটি', 'অস্কার', 'কান চলচ্চিত্র'
     ]
-    for w in entWords:
-        if w in t: return 'entertainment'
+    if any(w in t for w in ent_words):
+        return 'entertainment'
 
-    techWords = [
+    # 5. Technology Taxonomy
+    tech_words = [
         'প্রযুক্তি', 'স্মার্টফোন', 'আইফোন', 'এআই', 'কৃত্রিম বুদ্ধিমত্তা', 'অ্যাপল', 'ফেসবুক', 'গুগল',
         'ইন্টারনেট', 'কম্পিউটার', 'হোয়াটসঅ্যাপ', 'সাইবার', 'রোবট', 'টেলিযোগাযোগ', 'ডিজিটাল', 'ড্রোন',
-        'সফটওয়্যার', 'গ্যাজেট', 'আইওএস', 'অ্যান্ড্রয়েড', 'মেটা', 'মাইক্রোসফট', 'মহাকাশ', 'নাসা', 'চ্যাটজিপিটি', 'আইটি'
+        'সফটওয়্যার', 'গ্যাজেট', 'আইওএস', 'অ্যান্ড্রয়েড', 'মেটা', 'মাইক্রোসফট', 'মহাকাশ', 'নাসা', 'চ্যাটজিপিটি', 'আইটি',
+        'উইন্ডোজ', 'ল্যাপটপ', 'অপটিক্যাল ফাইবার'
     ]
-    for w in techWords:
-        if w in t: return 'tech'
+    if any(w in t for w in tech_words):
+        return 'tech'
 
-    econWords = [
+    # 6. Economy Taxonomy
+    econ_words = [
         'অর্থনীতি', 'শেয়ারবাজার', 'পুঁজিবাজার', 'ডলারের দাম', 'মুদ্রাস্ফীতি', 'স্বর্ণের দাম', 'বাজেট',
         'রাজস্ব', 'রপ্তানি আয়', 'আমদানি ব্যয়', 'রেমিট্যান্স', 'এলএনজি', 'আইএমএফ', 'ভ্যাট', 'ব্যাংকিং',
-        'বাংলাদেশ ব্যাংক', 'মূল্যস্ফীতি', 'টাকা পাচার', 'খেলাপি ঋণ', 'বাণিজ্য ঘাটতি', 'করদাতা', 'জিডিপি'
+        'বাংলাদেশ ব্যাংক', 'মূল্যস্ফীতি', 'টাকা পাচার', 'খেলাপি ঋণ', 'বাণিজ্য ঘাটতি', 'করদাতা', 'জিডিপি',
+        'বাণিজ্য মেলা', 'ঋণখেলাপি', 'সঞ্চয়পত্র', 'অর্থ মন্ত্রণালয়ের'
     ]
-    for w in econWords:
-        if w in t: return 'economy'
+    if any(w in t for w in econ_words):
+        return 'economy'
 
-    intlWords = [
+    # 7. International Taxonomy (Foreign nations, leaders, foreign geo-politics)
+    intl_words = [
         'যুক্তরাষ্ট্র', 'চীন', 'ভারত', 'পাকিস্তান', 'রাশিয়া', 'ইউক্রেন', 'ইসরায়েল', 'গাজা', 'ফিলিস্তিন',
         'ইরান', 'আন্তর্জাতিক', 'ট্রাম্প', 'বাইডেন', 'জাতিসংঘ', 'মধ্যপ্রাচ্য', 'ব্রিটেন', 'নেপাল', 'আমেরিকা',
-        'লেবানন', 'পুতিন', 'হোয়াইট হাউস', 'পেন্টাগন', 'ইউরোপীয়', 'সিরিয়া', 'ইয়েমেন', 'সীমান্তে'
+        'লেবানন', 'পুতিন', 'হোয়াইট হাউস', 'পেন্টাগন', 'ইউরোপীয়', 'সিরিয়া', 'ইয়েমেন', 'মালয়েশিয়া',
+        'সৌদি আরব', 'সংযুক্ত আরব আমিরাত', 'কাতার', 'তুরস্ক', 'জার্মানি', 'ফ্রান্স', 'যুক্তরাজ্য',
+        'কানাডা', 'অস্ট্রেলিয়া', 'জাপান', 'দক্ষিণ কোরিয়া', 'উত্তর কোরিয়া', 'হুতি', 'হিজবুল্লাহ',
+        'হামাস', 'তেল আবিব', 'ওয়াশিংটন', 'মস্কো', 'বেইজিং', 'নয়াদিল্লি', 'ইসলামাবাদ', 'কলম্বো',
+        'বিদেশ', 'প্রবাসী', 'পররাষ্ট্র'
     ]
-    for w in intlWords:
-        if w in t: return 'international'
+    if any(w in t for w in intl_words):
+        return 'international'
 
+    # 8. National Taxonomy (Default for domestic Bangladesh news)
     return 'national'
 
 headers_social = {'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'}
@@ -663,7 +678,7 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
                     "title": clean_t,
                     "link": l,
                     "timestamp": article_ts,
-                    "category": category if (category and category != 'all') else detect_cat(clean_t, l),
+                    "category": detect_cat(clean_t, l),
                     "source_id": s_id,
                     "source_name": s_name,
                     "source_badge": s_badge,
@@ -740,7 +755,7 @@ def fetch_ntv_live(now_ts, category=None):
                         "title": clean_t,
                         "link": l,
                         "timestamp": ts,
-                        "category": category if (category and category != 'all') else detect_cat(clean_t, l),
+                        "category": detect_cat(clean_t, l),
                         "source_id": 'ntv',
                         "source_name": 'এনটিভি (NTV)',
                         "source_badge": 'NTV',
