@@ -617,7 +617,8 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
     if category and category != 'all' and category in CATEGORY_KEYWORDS:
         cat_query = f" {CATEGORY_KEYWORDS[category]}"
     
-    query = f"site:{query_site}{cat_query}"
+    # Strictly query freshest news using when:2h, fall back to when:6h
+    query = f"site:{query_site}{cat_query} when:2h"
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=bn&gl=BD&ceid=BD:bn"
     try:
@@ -637,7 +638,11 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
                 seen.add(l)
 
                 dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
-                article_ts = int(dt_obj.timestamp()) if dt_obj else int(now_ts - len(candidates) * 60)
+                if not dt_obj: continue
+                article_ts = int(dt_obj.timestamp())
+                # Discard any news older than 24 hours immediately (and reject bad ancient dates)
+                if article_ts < (now_ts - 24 * 3600) or article_ts > (now_ts + 3600):
+                    continue
 
                 # Check RSS media/thumbnail
                 feed_img = ""
@@ -709,7 +714,43 @@ def fetch_channel24_live(now_ts, category=None):
     return fetch_google_site_rss('channel24bd.tv', 'channel24', 'চ্যানেল ২৪', 'Channel 24', '#0284c7', now_ts, category)
 
 def fetch_ntv_live(now_ts, category=None):
-    return fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category)
+    items = fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category)
+    if not items:
+        # Try without when:2h filter for NTV
+        query = "site:ntvbd.com when:1d"
+        rss_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=bn&gl=BD&ceid=BD:bn"
+        try:
+            req = urllib.request.Request(rss_url, headers=headers_browser)
+            with urllib.request.urlopen(req, timeout=3.5) as r:
+                root = ET.fromstring(r.read())
+                for it in root.findall('.//item')[:15]:
+                    t_elem = it.find('title')
+                    l_elem = it.find('link')
+                    pd_elem = it.find('pubDate')
+                    if t_elem is None or not t_elem.text: continue
+                    clean_t = re.sub(r'\s*[-–|]\s*(এনটিভি|ntv).*$', '', t_elem.text.strip(), flags=re.I).strip()
+                    l = l_elem.text.strip() if l_elem is not None else ''
+                    if not is_clean_headline(clean_t, l): continue
+                    dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
+                    if not dt_obj: continue
+                    ts = int(dt_obj.timestamp())
+                    if ts < (now_ts - 24 * 3600): continue
+                    items.append({
+                        "id": l,
+                        "title": clean_t,
+                        "link": l,
+                        "timestamp": ts,
+                        "category": category if (category and category != 'all') else detect_cat(clean_t, l),
+                        "source_id": 'ntv',
+                        "source_name": 'এনটিভি (NTV)',
+                        "source_badge": 'NTV',
+                        "source_color": '#16a34a',
+                        "image": BRAND_HD_IMAGES.get('ntv', ''),
+                        "paragraphs": []
+                    })
+        except Exception:
+            pass
+    return items
 
 def fetch_rtv_live(now_ts, category=None):
     return fetch_google_site_rss('rtvonline.com', 'rtv', 'আরটিভি (RTV)', 'RTV', '#ea580c', now_ts, category)
