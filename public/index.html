@@ -2655,7 +2655,7 @@
         }
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 5500);
         const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
         if (resp.ok) {
@@ -2703,7 +2703,7 @@
 
         const combinedMap = new Map();
 
-        // Fresh items first - ONLY mark and count new if matching active category filter
+        // Fresh items first - strictly prioritize newest items
         freshItems.forEach(it => {
           const matchesCurrentCategory = (targetCategory === 'all' || it.category === targetCategory);
           const matchesCurrentSource = (targetSource === 'all' || it.source_id === targetSource);
@@ -2713,6 +2713,9 @@
               it.is_new = true;
               addedCount++;
             }
+          } else if (forceRefresh && matchesCurrentCategory && matchesCurrentSource) {
+            it.is_new = true;
+            addedCount++;
           }
           combinedMap.set(it.link, it);
         });

@@ -906,12 +906,13 @@ def get_news(
                 except Exception:
                     pass
 
-    # Fallback to local catalog if live fetch count is low
-    if len(news) < 5:
-        local_items = load_pristine_catalog()
-        for it in local_items:
-            if not source or source == 'all' or it.get('source_id') == source:
-                news.append(it)
+    # Supplement live results with pristine fresh catalog so all 10 sources are fully represented
+    local_items = load_pristine_catalog()
+    seen_links = set(x.get('link') for x in news)
+    for it in local_items:
+        if (not source or source == 'all' or it.get('source_id') == source) and it.get('link') not in seen_links:
+            seen_links.add(it.get('link'))
+            news.append(it)
 
     # Filter out any video content strictly
     clean_news = []
@@ -938,6 +939,10 @@ def get_news(
         clean_news = cat_items
 
     
+    # Strict 24-hour fresh news constraint: filter out articles older than 24 hours
+    cut24 = now_ts - (24 * 3600)
+    clean_news = [n for n in clean_news if (n.get('timestamp') or n.get('published_at') or 0) >= cut24]
+
     # Strict chronological sorting: newest publication timestamp first
     clean_news.sort(key=lambda x: (x.get("published_at") or x.get("timestamp") or 0), reverse=True)
 
