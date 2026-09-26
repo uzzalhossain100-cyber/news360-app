@@ -2474,6 +2474,11 @@
         allNewsItems = INITIAL_NEWS_DATA.filter(function(it) {
           return !it.timestamp || it.timestamp >= cut24;
         });
+        allNewsItems.sort(function(a, b) {
+          const timeA = a.timestamp || a.published_at || 0;
+          const timeB = b.timestamp || b.published_at || 0;
+          return timeB - timeA;
+        });
         allNewsItems.forEach(function(item) {
           if (item.timestamp) {
             item.time_ago = calculateTimeAgo(item.timestamp);
@@ -2718,13 +2723,18 @@
           const matchesCurrentCategory = (targetCategory === 'all' || it.category === targetCategory);
           const matchesCurrentSource = (targetSource === 'all' || it.source_id === targetSource);
 
+          const itemAgeSec = nowSec - (it.timestamp || 0);
           if (!currentLinkSet.has(it.link)) {
             if (matchesCurrentCategory && matchesCurrentSource) {
-              it.is_new = true;
+              if (itemAgeSec <= 7200) {
+                it.is_new = true;
+              }
               addedCount++;
             }
           } else if (forceRefresh && matchesCurrentCategory && matchesCurrentSource) {
-            it.is_new = true;
+            if (itemAgeSec <= 7200) {
+              it.is_new = true;
+            }
             addedCount++;
           }
           combinedMap.set(it.link, it);
@@ -2883,19 +2893,11 @@
         items = items.filter(function(item) { return item.title.toLowerCase().indexOf(q) !== -1; });
       }
 
-      // Strict descending order: Admin published custom news and newest items first
+      // Strict chronological sorting: least time ago (newest) news strictly appears first
       items.sort(function(a, b) {
-        // Admin published custom news ALWAYS comes first at the very top, sorted newest to oldest
-        if (a.is_custom && !b.is_custom) return -1;
-        if (!a.is_custom && b.is_custom) return 1;
-        if (a.is_custom && b.is_custom) return (b.timestamp || 0) - (a.timestamp || 0);
-
-        // Then newly arrived items
-        if (a.is_new && !b.is_new) return -1;
-        if (!a.is_new && b.is_new) return 1;
-
-        // Then by timestamp descending
-        return (b.timestamp || 0) - (a.timestamp || 0);
+        const timeA = a.timestamp || a.published_at || 0;
+        const timeB = b.timestamp || b.published_at || 0;
+        return timeB - timeA;
       });
 
       const badge = document.getElementById('newsCountBadge');
