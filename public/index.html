@@ -1576,7 +1576,7 @@
         </span>
       </div>
       <div style="display:flex; align-items:center; gap:12px; font-size:12px; color:var(--text-muted);">
-        <span id="autoRefreshTimer" style="color:#16a34a; font-weight:600; background:#dcfce7; padding:2px 8px; border-radius:12px;">অটো আপডেট: ৫:০০</span>
+        
         <span id="lastUpdatedTime">এখনই আপডেট হয়েছে</span>
       </div>
     </div>
@@ -2423,25 +2423,13 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    // 5-minute periodic auto-refresh disabled per user requirement:
+    // Auto-refresh now triggers strictly when entering any page, and further updates are on-demand via manual refresh button
     function startAutoRefreshTimer() {
-      if (refreshTimerInterval) clearInterval(refreshTimerInterval);
-      refreshSecondsLeft = 300;
-
-      refreshTimerInterval = setInterval(function() {
-        refreshSecondsLeft--;
-        const mins = Math.floor(refreshSecondsLeft / 60);
-        const secs = refreshSecondsLeft % 60;
-        const timeStr = bnDigits(mins) + ':' + (secs < 10 ? '০' : '') + bnDigits(secs);
-        const timerElem = document.getElementById('autoRefreshTimer');
-        if (timerElem) {
-          timerElem.innerText = 'অটো আপডেট: ' + timeStr;
-        }
-
-        if (refreshSecondsLeft <= 0) {
-          refreshSecondsLeft = 300;
-          loadNews(true);
-        }
-      }, 1000);
+      if (refreshTimerInterval) {
+        clearInterval(refreshTimerInterval);
+        refreshTimerInterval = null;
+      }
     }
 
     // Initialize
