@@ -107,7 +107,7 @@ def detect_cat(title, url=""):
     if any(k in u for k in ['/economy/', '/business/', '/arthoniti/', '/banijjo/', '/stock/', '/share-market/', '/banks/']):
         return 'economy'
     if any(k in u for k in ['/islamic-life/', '/islam/', '/religion/', '/dhormo/', '/islamic/']):
-        return 'islamic'
+        return 'national'
     if any(k in u for k in ['/international/', '/world/', '/bidesh/', '/prabash/', '/middle-east/', '/asia/', '/america/', '/europe/']):
         # If it's Bangladesh Prime Minister / Bangladeshi domestic news inside world, verify:
         if not any(k in t for k in ['বাংলাদেশের', 'ঢাকার', 'উপদেষ্টা', 'তারেক রহমান', 'প্রধান উপদেষ্টা']):
@@ -135,7 +135,7 @@ def detect_cat(title, url=""):
         'তাফসির', 'শরীয়াহ', 'শরিয়াহ', 'শরীয়াহ আইন', 'তাহাজ্জুদ', 'মুফতি', 'মাওলানা', 'আযান', 'তাবলিগ', 'কবর', 'জানাজা', 'আখেরাত'
     ]
     if any(w in t for w in islamic_keywords):
-        return 'islamic'
+        return 'national'
 
     # 4. Entertainment (বিনোদন)
     entertainment_keywords = [
@@ -499,7 +499,6 @@ CATEGORY_KEYWORDS = {
     'tech': 'প্রযুক্তি OR মোবাইল OR ইন্টারনেট',
     'economy': 'অর্থনীতি OR ব্যাংক OR শেয়ারবাজার OR বাজেট',
     'international': 'আন্তর্জাতিক OR বিশ্ব OR যুদ্ধ',
-    'islamic': 'ইসলাম OR কোরআন OR হাদিস OR নামাজ OR রোজা',
     'national': 'জাতীয় OR বাংলাদেশ'
 }
 
