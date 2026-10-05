@@ -1,7 +1,6 @@
 fastapi
 beautifulsoup4
 edge-tts
-
-googlenewsdecoder
+googlenewsdecoder==0.2.1
 requests
-selectolax
+selectolax==0.4.13

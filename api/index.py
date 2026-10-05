@@ -559,6 +559,10 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
         except Exception:
             continue
 
+    # If decoding failed and we are still pointing to google.com, do NOT treat google.com as the article!
+    if 'news.google.com' in real_url:
+        html_content = ""
+
     if html_content:
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -600,7 +604,7 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
             search_scope = article_body if article_body else soup
 
             seen_paras = set()
-            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন', 'পড়তে ক্লিক করুন']
+            skip_keywords = ['সর্বস্বত্ব সংরক্ষিত', 'কপিরাইট', 'Terms of Use', 'Privacy Policy', 'বিজ্ঞাপন', 'আরও পড়ুন', 'ফলো করুন', 'সাবস্ক্রাইব', 'অনলাইন সংস্করণ', 'মন্তব্য করুন', 'পড়তে ক্লিক করুন', 'Comprehensive up-to-date', 'aggregated from sources', 'Google News']
 
             for p in search_scope.find_all(['p', 'div']):
                 if p.name == 'div' and p.find_all('p'):
@@ -735,7 +739,52 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
     return candidates
 
 def fetch_channel24_live(now_ts, category=None):
-    return fetch_google_site_rss('channel24bd.tv', 'channel24', 'চ্যানেল ২৪', 'Channel 24', '#0284c7', now_ts, category)
+    candidates = []
+    seen = set()
+    try:
+        req = urllib.request.Request("https://www.channel24bd.tv/rss/rss.xml", headers=headers_browser)
+        with urllib.request.urlopen(req, timeout=3.5) as r:
+            root = ET.fromstring(r.read())
+            for it in root.findall('.//item')[:30]:
+                t_elem = it.find('title')
+                l_elem = it.find('link')
+                pd_elem = it.find('pubDate')
+                if t_elem is None or not t_elem.text: continue
+                clean_t = t_elem.text.strip()
+                l = l_elem.text.strip() if (l_elem is not None and l_elem.text) else ''
+                if not is_clean_headline(clean_t, l) or l in seen: continue
+                seen.add(l)
+                dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
+                article_ts = int(dt_obj.timestamp()) if dt_obj else int(now_ts - len(candidates) * 60)
+                
+                # Check media enclosure or thumbnail
+                feed_img = ""
+                enc = it.find('enclosure')
+                if enc is not None and 'url' in enc.attrib:
+                    feed_img = enc.attrib['url']
+                if not feed_img:
+                    m_c = it.find('{http://search.yahoo.com/mrss/}content')
+                    if m_c is not None and 'url' in m_c.attrib:
+                        feed_img = m_c.attrib['url']
+
+                candidates.append({
+                    "id": l,
+                    "title": clean_t,
+                    "link": l,
+                    "timestamp": article_ts,
+                    "category": detect_cat(clean_t, l),
+                    "source_id": 'channel24',
+                    "source_name": 'চ্যানেল ২৪',
+                    "source_badge": 'Channel 24',
+                    "source_color": '#0284c7',
+                    "image": feed_img or BRAND_HD_IMAGES.get('channel24', ''),
+                    "paragraphs": []
+                })
+    except Exception:
+        pass
+    if not candidates:
+        return fetch_google_site_rss('channel24bd.tv', 'channel24', 'চ্যানেল ২৪', 'Channel 24', '#0284c7', now_ts, category)
+    return candidates
 
 def fetch_ntv_live(now_ts, category=None):
     items = fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category)
