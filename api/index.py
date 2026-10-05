@@ -545,19 +545,21 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
     ]
 
     html_content = ""
-    for ua in ua_list:
-        try:
-            req = urllib.request.Request(real_url, headers={
-                'User-Agent': ua,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8'
-            })
-            with urllib.request.urlopen(req, timeout=4) as r:
-                html_content = r.read().decode('utf-8', errors='ignore')
-                if html_content and len(html_content) > 500:
-                    break
-        except Exception:
-            continue
+    # Never fetch Google News redirect page as the article body
+    if 'news.google.com' not in real_url:
+        for ua in ua_list:
+            try:
+                req = urllib.request.Request(real_url, headers={
+                    'User-Agent': ua,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8'
+                })
+                with urllib.request.urlopen(req, timeout=4) as r:
+                    html_content = r.read().decode('utf-8', errors='ignore')
+                    if html_content and len(html_content) > 500:
+                        break
+            except Exception:
+                continue
 
     # If decoding failed and we are still pointing to google.com, do NOT treat google.com as the article!
     if 'news.google.com' in real_url:
@@ -628,6 +630,9 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
                             break
         except Exception:
             pass
+
+    if not image or 'google' in image.lower() or 'unsplash' in image.lower():
+        image = BRAND_HD_IMAGES.get(source_id, '')
 
     return {
         "title": title or title_hint or "",

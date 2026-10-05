@@ -3274,10 +3274,11 @@
         .then(res => res.json())
         .then(liveData => {
           if (liveData) {
-            if (liveData.paragraphs && liveData.paragraphs.length > 0) {
-              item.paragraphs = liveData.paragraphs;
+            const validLiveParas = (liveData.paragraphs || []).filter(p => !p.includes('Comprehensive up-to-date') && !p.includes('Google News'));
+            if (validLiveParas.length > 0) {
+              item.paragraphs = validLiveParas;
               container.innerHTML = '';
-              liveData.paragraphs.forEach(function(p) {
+              validLiveParas.forEach(function(p) {
                 const pe = document.createElement('p');
                 pe.innerText = p;
                 container.appendChild(pe);
@@ -3288,10 +3289,9 @@
                 '<p>এই বিষয়ে ' + item.source_name + '-এর বিশেষ সম্পাদকীয় ও মাঠপর্যায়ের তথ্য সংগ্রহ করা হয়েছে। বিস্তারিত প্রতিবেদন পড়তে নিচের "মূল ওয়েবসাইটে পড়ুন" বাটনে স্পর্শ করুন।</p>';
             }
 
-            if (liveData.image && liveData.image.startsWith('http')) {
+            if (liveData.image && liveData.image.startsWith('http') && !liveData.image.includes('googleusercontent') && !liveData.image.includes('google.com')) {
               item.image = liveData.image;
               modalImg.src = liveData.image;
-              // Synchronize the thumbnail image on the homepage news grid
               const cardImgEl = document.querySelector(`[data-id="${item.id}"] img.card-img`) || document.querySelector(`[data-link="${item.link}"] img.card-img`);
               if (cardImgEl) cardImgEl.src = liveData.image;
             }
