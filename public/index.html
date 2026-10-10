@@ -1897,8 +1897,17 @@
 
           <!-- Full Content / Description -->
           <div style="display: flex; flex-direction: column; gap: 6px;">
-            <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">বিস্তারিত খবর লিখুন <span style="color:#e11d48;">*</span></label>
-            <textarea id="adminArticleContent" placeholder="খবরের পূর্ণাঙ্গ বিবরণ ও বিস্তারিত অনুচ্ছেদ এখানে লিখুন..." required style="width: 100%; box-sizing: border-box; padding: 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color); background: var(--bg-primary); color: var(--text-main); min-height: 180px; resize: vertical; line-height: 1.6; outline: none;"></textarea>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">বিস্তারিত খবর লিখুন <span style="color:#e11d48;">*</span></label>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" onclick="formatAdminTextBold()" title="সিলেক্ট করা লেখা বোল্ড করুন (কীবোর্ড শর্টকাট: Ctrl+B)" style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); color: #166534; border: 1.5px solid #86efac; border-radius: 7px; padding: 6px 14px; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                  <span style="font-size: 15px; font-weight: 900; font-family: serif; background: #166534; color: white; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px;">B</span>
+                  <span>লেখা বোল্ড (Bold) করুন</span>
+                </button>
+                <span style="font-size: 12px; color: var(--text-muted);">(সিলেক্ট করে বাটনে চাপুন বা Ctrl+B)</span>
+              </div>
+            </div>
+            <textarea id="adminArticleContent" onkeydown="handleAdminTextareaKeydown(event)" placeholder="খবরের পূর্ণাঙ্গ বিবরণ ও বিস্তারিত অনুচ্ছেদ এখানে লিখুন... যে অংশ বোল্ড করতে চান তা সিলেক্ট করে উপরের 'লেখা বোল্ড (Bold) করুন' বাটনে চাপুন বা Ctrl+B চাপুন।" required style="width: 100%; box-sizing: border-box; padding: 14px; font-size: 14.5px; border-radius: 9px; border: 1.5px solid var(--border-color); background: var(--bg-primary); color: var(--text-main); min-height: 190px; resize: vertical; line-height: 1.7; outline: none; font-family: inherit;"></textarea>
           </div>
 
           <!-- Image Upload / Image Preview -->
@@ -3206,7 +3215,69 @@
       }
     }
 
-    function openArticleModal(item) {
+    
+    function formatAdminTextBold() {
+      const textarea = document.getElementById('adminArticleContent');
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = textarea.value;
+
+      if (start === end) {
+        // Nothing selected: insert placeholder bold template
+        const insertText = '**বোল্ড লেখা**';
+        textarea.value = val.substring(0, start) + insertText + val.substring(end);
+        textarea.focus();
+        textarea.setSelectionRange(start + 2, start + insertText.length - 2);
+        return;
+      }
+
+      const selected = val.substring(start, end);
+      let replacement = '';
+      if (selected.startsWith('**') && selected.endsWith('**') && selected.length >= 4) {
+        // Toggle OFF bold
+        replacement = selected.substring(2, selected.length - 2);
+      } else if (selected.startsWith('<b>') && selected.endsWith('</b>') && selected.length >= 7) {
+        // Toggle OFF bold
+        replacement = selected.substring(3, selected.length - 4);
+      } else {
+        // Toggle ON bold
+        replacement = '**' + selected + '**';
+      }
+
+      textarea.value = val.substring(0, start) + replacement + val.substring(end);
+      textarea.focus();
+      textarea.setSelectionRange(start, start + replacement.length);
+    }
+
+    function handleAdminTextareaKeydown(e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        formatAdminTextBold();
+      }
+    }
+
+    function renderFormattedNewsText(raw) {
+      if (!raw) return '';
+      // HTML escape to ensure safety
+      let safe = String(raw)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+      // Convert **text** to <strong>text</strong>
+      safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      // Also support <b>text</b>
+      safe = safe.replace(/&lt;b&gt;(.+?)&lt;\/b&gt;/gi, '<strong>$1</strong>');
+      safe = safe.replace(/&lt;strong&gt;(.+?)&lt;\/strong&gt;/gi, '<strong>$1</strong>');
+
+      return safe;
+    }
+
+function openArticleModal(item) {
       currentModalArticle = item;
       const modal = document.getElementById('newsModal');
       const modalLoading = document.getElementById('modalLoading');
@@ -3276,12 +3347,14 @@
         if (customParas.length > 0) {
           customParas.forEach(function(p) {
             const pElem = document.createElement('p');
-            pElem.innerText = p;
+            pElem.style.margin = '0 0 14px 0';
+            pElem.style.lineHeight = '1.8';
+            pElem.innerHTML = renderFormattedNewsText(p);
             container.appendChild(pElem);
           });
         } else {
           const pElem = document.createElement('p');
-          pElem.innerText = item.title;
+          pElem.innerHTML = renderFormattedNewsText(item.title);
           container.appendChild(pElem);
         }
         return;
@@ -3304,7 +3377,9 @@
         container.innerHTML = '';
         foundParas.forEach(function(p) {
           const pElem = document.createElement('p');
-          pElem.innerText = p;
+          pElem.style.margin = '0 0 14px 0';
+          pElem.style.lineHeight = '1.8';
+          pElem.innerHTML = renderFormattedNewsText(p);
           container.appendChild(pElem);
         });
       } else {
