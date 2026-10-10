@@ -522,6 +522,34 @@ def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), t
     image = ""
     real_url = url
 
+    # 0. Check admin articles database
+    if '/article/' in url or (source_id and 'newsbangla' in source_id):
+        try:
+            admin_arts = read_persisted_admin_articles()
+            for a in admin_arts:
+                if a.get('link') == url or a.get('id') in url or (title_hint and a.get('title') == title_hint):
+                    return {
+                        "title": a.get("title", ""),
+                        "image": a.get("image", ""),
+                        "paragraphs": a.get("paragraphs") or ([a.get("content")] if a.get("content") else [])
+                    }
+        except Exception:
+            pass
+
+    # 0. Check admin articles database
+    if '/article/' in url or (source_id and 'newsbangla' in source_id):
+        try:
+            admin_arts = read_persisted_admin_articles()
+            for a in admin_arts:
+                if a.get('link') == url or a.get('id') in url or (title_hint and a.get('title') == title_hint):
+                    return {
+                        "title": a.get("title", ""),
+                        "image": a.get("image", ""),
+                        "paragraphs": a.get("paragraphs") or ([a.get("content")] if a.get("content") else [])
+                    }
+        except Exception:
+            pass
+
     # Decode Google News redirect if needed
     if 'news.google.com' in real_url:
         try:
