@@ -1109,12 +1109,15 @@
       background: var(--bg-primary);
       border: 1px solid var(--border-color);
       color: var(--text-main);
-      padding: 6px 14px;
+      padding: 8px 16px;
       border-radius: 8px;
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.2s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     .article-back-btn:hover {
       background: #dc2626;
@@ -1126,8 +1129,9 @@
       background: var(--bg-primary);
       border: 1px solid var(--border-color);
       color: var(--text-muted);
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -1135,6 +1139,9 @@
       cursor: pointer;
       font-size: 18px;
       transition: all 0.2s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
 
     .btn-close:hover {
@@ -2004,11 +2011,11 @@
     <div class="modal-card">
       <div class="modal-header">
         <div class="modal-header-info">
-          <button class="article-back-btn" onclick="closeModal()" title="তালিকায় ফিরে যান">
-            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button type="button" class="article-back-btn" onclick="closeModal(); return false;" title="তালিকায় ফিরে যান" style="pointer-events: auto; position: relative; z-index: 20;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="pointer-events: none;">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
             </svg>
-            <span>ফিরে যান</span>
+            <span style="pointer-events: none;">ফিরে যান</span>
           </button>
           <span class="modal-source-pill" id="modalSourcePill" style="background:#dc2626">প্রথম আলো</span>
           <span style="font-size:13px; font-weight:600; color:#dc2626;" id="modalTimeAgo" style="font-family:'Anek Bangla', 'Noto Serif Bengali', sans-serif; font-size:13px; font-weight:700; letter-spacing:0.3px;"></span>
@@ -2019,7 +2026,7 @@
             <span id="ttsBtnText">খবরটি শুনুন</span>
           </button>
         </div>
-        <button class="btn-close" onclick="closeModal()" title="বন্ধ করুন">✕</button>
+        <button type="button" class="btn-close" onclick="closeModal(); return false;" title="বন্ধ করুন" style="pointer-events: auto; position: relative; z-index: 20;">✕</button>
       </div>
 
       <div class="modal-body" id="modalBody">
@@ -3244,6 +3251,14 @@
       document.body.classList.add('article-open');
       document.body.style.overflow = 'hidden';
       modal.scrollTop = 0;
+      isModalOpen = true;
+
+      // Push history state so Android hardware back button or browser back closes the modal nicely
+      try {
+        if (window.history && (!window.history.state || !window.history.state.modalOpen)) {
+          window.history.pushState({ modalOpen: true }, '', window.location.href);
+        }
+      } catch (e) {}
 
       modalLoading.style.display = 'none';
       modalContent.style.display = 'block';
@@ -3380,13 +3395,37 @@
       playNextSentenceWeb();
     }
 
-    function closeModal() {
-      stopSpeaking();
+    let isModalOpen = false;
+
+    function closeModal(fromHistory) {
+      try {
+        stopSpeaking();
+      } catch (e) {}
+
       const modal = document.getElementById('newsModal');
-      modal.classList.remove('show');
+      if (modal) {
+        modal.classList.remove('show');
+      }
       document.body.classList.remove('article-open');
       document.body.style.overflow = '';
+      isModalOpen = false;
+
+      // Clean URL if we were in /article/ or ?article= mode and user clicked close button
+      if (!fromHistory && window.history) {
+        if (window.location.search.includes('article=') || window.location.pathname.startsWith('/article/')) {
+          try {
+            window.history.pushState(null, '', '/');
+          } catch (e) {}
+        }
+      }
     }
+
+    // Support browser / Android hardware back button
+    window.addEventListener('popstate', function(e) {
+      if (isModalOpen) {
+        closeModal(true);
+      }
+    });
 
     function handleBackdropClick(e) {
       if (e.target.id === 'newsModal') {
