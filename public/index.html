@@ -3046,13 +3046,12 @@
     function getArticleDirectShareUrl(item) {
       if (!item) return window.location.href;
       const baseUrl = 'https://newsbangla.vercel.app';
-      // If it has an ID, use ?article=<id>
+      // Always route via /article/<id> so Facebook, WhatsApp, etc. fetch server-side Open Graph tags (OG Title, OG Image)
       if (item.id) {
-        return baseUrl + '/?article=' + encodeURIComponent(item.id);
+        return baseUrl + '/article/' + encodeURIComponent(item.id);
       }
-      // Or use original link encoded as ?link=
       if (item.link) {
-        return baseUrl + '/?link=' + encodeURIComponent(item.link);
+        return baseUrl + '/article/' + encodeURIComponent(item.link);
       }
       return baseUrl;
     }
@@ -3157,15 +3156,23 @@
     function checkAndOpenArticleFromUrl() {
       try {
         const params = new URLSearchParams(window.location.search);
-        const articleId = params.get('article');
-        const articleLink = params.get('link');
+        let articleId = params.get('article');
+        let articleLink = params.get('link');
+
+        // Also detect if path is /article/<id>
+        if (!articleId && !articleLink && window.location.pathname.startsWith('/article/')) {
+          const pathId = window.location.pathname.replace('/article/', '').trim();
+          if (pathId) {
+            articleId = decodeURIComponent(pathId);
+          }
+        }
 
         if (!articleId && !articleLink) return;
 
         function tryFindAndOpen() {
           let found = null;
           if (articleId) {
-            found = allNewsItems.find(it => it.id === articleId || it.id === decodeURIComponent(articleId));
+            found = allNewsItems.find(it => it.id === articleId || it.id === decodeURIComponent(articleId) || (it.link && it.link === articleId));
           }
           if (!found && articleLink) {
             const decLink = decodeURIComponent(articleLink);
@@ -3182,9 +3189,10 @@
         // Try immediately
         if (!tryFindAndOpen()) {
           // Retry after API news load completes
-          setTimeout(tryFindAndOpen, 800);
-          setTimeout(tryFindAndOpen, 1800);
-          setTimeout(tryFindAndOpen, 3000);
+          setTimeout(tryFindAndOpen, 600);
+          setTimeout(tryFindAndOpen, 1400);
+          setTimeout(tryFindAndOpen, 2500);
+          setTimeout(tryFindAndOpen, 4000);
         }
       } catch (e) {
         console.warn('URL routing check error:', e);

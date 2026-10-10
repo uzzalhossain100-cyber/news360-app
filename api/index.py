@@ -1111,9 +1111,13 @@ def get_news(
 # Generates dynamic OpenGraph tags with the real article headline and thumbnail image
 # ---------------------------------------------------------------------------
 def render_social_share_page(article_id: str, direct_link: Optional[str] = None, user_agent: str = ""):
+    import urllib.parse
     found_item = None
     target_id = article_id.strip() if article_id else ""
     target_link = direct_link.strip() if direct_link else ""
+
+    # Unquote in case target_id is URL-encoded
+    decoded_target = urllib.parse.unquote(target_id)
 
     import hashlib
     def matches_item(it):
@@ -1122,11 +1126,11 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         it_link = str(it.get("link") or "").strip()
         
         # Exact match
-        if target_id and (it_id == target_id or f"newsbangla-{it_id}" == target_id or f"custom_{it_id}" == target_id):
+        if target_id and (it_id == target_id or it_id == decoded_target or f"newsbangla-{it_id}" == target_id or f"custom_{it_id}" == target_id):
             return True
         if target_link and (it_link == target_link or it_id == target_link):
             return True
-        if target_id and (it_link == target_id):
+        if target_id and (it_link == target_id or it_link == decoded_target):
             return True
         
         # 32-bit int hash match (same as JS implementation)
@@ -1139,19 +1143,19 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
                     h -= 0x100000000
             return "nb_" + hex(abs(h))[2:]
 
-        if it_link and target_id == js_hash(it_link):
+        if it_link and (target_id == js_hash(it_link) or decoded_target == js_hash(it_link)):
             return True
-        if it_id and target_id == js_hash(it_id):
+        if it_id and (target_id == js_hash(it_id) or decoded_target == js_hash(it_id)):
             return True
 
         # MD5 Hash match
         if it_link:
             h = "nb_" + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:10]
-            if target_id == h:
+            if target_id == h or decoded_target == h:
                 return True
         if it_id:
             h2 = "nb_" + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:10]
-            if target_id == h2:
+            if target_id == h2 or decoded_target == h2:
                 return True
         return False
 
@@ -1173,6 +1177,20 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
                 if matches_item(it):
                     found_item = it
                     break
+        except Exception:
+            pass
+
+    # 3. If target_id or decoded_target looks like an external newspaper URL, scrape og:title and og:image on the fly!
+    if not found_item and (decoded_target.startswith("http://") or decoded_target.startswith("https://")):
+        try:
+            art_data = get_article(url=decoded_target)
+            if art_data and art_data.get("title"):
+                found_item = {
+                    "id": target_id,
+                    "title": art_data.get("title"),
+                    "image": art_data.get("image"),
+                    "paragraphs": art_data.get("paragraphs")
+                }
         except Exception:
             pass
 
