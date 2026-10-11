@@ -1406,60 +1406,63 @@ def share_image_proxy(url: str = Query(...)):
 @app.get("/api/article-image/{article_id:path}")
 @app.get("/api/article-image")
 def serve_article_image(article_id: str = "", id: Optional[str] = Query(None)):
-    import base64
-    target_id = (article_id or id or "").strip()
-    found_item = None
-    
-    local_p1 = os.path.join(os.path.dirname(__file__), "admin_news.json")
-    local_p2 = os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json")
-    for p in [local_p1, local_p2]:
-        if os.path.exists(p):
+    try:
+        import base64
+        target_id = (article_id or id or "").strip()
+        found_item = None
+        
+        local_p1 = os.path.join(os.path.dirname(__file__), "admin_news.json")
+        local_p2 = os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json")
+        for p in [local_p1, local_p2]:
+            if os.path.exists(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        for a in data:
+                            if target_id and (a.get("id") == target_id or str(a.get("id")).endswith(target_id) or target_id in str(a.get("id"))):
+                                found_item = a
+                                break
+                except Exception:
+                    pass
+            if found_item:
+                break
+
+        if not found_item:
             try:
-                with open(p, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for a in data:
-                        if target_id and (a.get("id") == target_id or str(a.get("id")).endswith(target_id) or target_id in str(a.get("id"))):
-                            found_item = a
-                            break
+                admin_articles = read_persisted_admin_articles()
+                for a in admin_articles:
+                    if target_id and (a.get("id") == target_id or str(a.get("id")).endswith(target_id) or target_id in str(a.get("id"))):
+                        found_item = a
+                        break
             except Exception:
                 pass
-        if found_item:
-            break
 
-    if not found_item:
-        try:
-            admin_articles = read_persisted_admin_articles()
-            for a in admin_articles:
-                if target_id and (a.get("id") == target_id or str(a.get("id")).endswith(target_id) or target_id in str(a.get("id"))):
-                    found_item = a
-                    break
-        except Exception:
-            pass
+        if found_item and found_item.get("image"):
+            img_str = found_item.get("image")
+            if img_str.startswith("data:"):
+                try:
+                    header, b64_data = img_str.split(",", 1)
+                    mime = "image/jpeg"
+                    if "png" in header: mime = "image/png"
+                    elif "webp" in header: mime = "image/webp"
+                    binary_data = base64.b64decode(b64_data)
+                    return Response(
+                        content=binary_data,
+                        media_type=mime,
+                        headers={
+                            "Cache-Control": "public, max-age=86400, s-maxage=86400",
+                            "Content-Type": mime
+                        }
+                    )
+                except Exception:
+                    pass
+            elif img_str.startswith("http"):
+                return Response(status_code=302, headers={"Location": img_str})
 
-    if found_item and found_item.get("image"):
-        img_str = found_item.get("image")
-        if img_str.startswith("data:"):
-            try:
-                header, b64_data = img_str.split(",", 1)
-                mime = "image/jpeg"
-                if "png" in header: mime = "image/png"
-                elif "webp" in header: mime = "image/webp"
-                binary_data = base64.b64decode(b64_data)
-                return Response(
-                    content=binary_data,
-                    media_type=mime,
-                    headers={
-                        "Cache-Control": "public, max-age=86400, s-maxage=86400",
-                        "Content-Type": mime
-                    }
-                )
-            except Exception:
-                pass
-        elif img_str.startswith("http"):
-            return Response(status_code=302, headers={"Location": img_str})
-
-    return Response(status_code=302, headers={"Location": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"})
-
+        return Response(status_code=302, headers={"Location": "https://media.prothomalo.com/prothomalo-bangla%2F2024-09-22%2F5lwyn5je%2Fdefaultog.jpg"})
+    except Exception as e:
+        import traceback
+        return Response(content="Error: " + traceback.format_exc(), media_type="text/plain", status_code=200)
 
 @app.get("/api/tts")
 async def tts_stream(text: str = Query(...)):
