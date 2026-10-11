@@ -386,15 +386,15 @@ def fetch_prothomalo_live(now_ts):
     # 3. Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
         try:
-            art = get_article(item["link"], item["source_id"], item["title"])
-            if art.get("image") and art["image"].startswith("http"):
+            art = get_article(url=item["link"], source_id=item["source_id"], title_hint=item["title"])
+            if art.get("image") and art["image"].startswith("http") and not any(k in art["image"].lower() for k in ['default', 'logo-white', 'icon']):
                 item["image"] = art["image"]
             if art.get("paragraphs") and len(art["paragraphs"]) > 0:
                 item["paragraphs"] = art["paragraphs"]
         except Exception:
             pass
         if not item.get("image") or not item["image"].strip():
-            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], '')
         return item
 
     if candidates:
@@ -467,15 +467,15 @@ def fetch_bbc_live(now_ts):
     # 3. Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
         try:
-            art = get_article(item["link"], item["source_id"], item["title"])
-            if art.get("image") and art["image"].startswith("http"):
+            art = get_article(url=item["link"], source_id=item["source_id"], title_hint=item["title"])
+            if art.get("image") and art["image"].startswith("http") and not any(k in art["image"].lower() for k in ['default', 'logo-white', 'icon']):
                 item["image"] = art["image"]
             if art.get("paragraphs") and len(art["paragraphs"]) > 0:
                 item["paragraphs"] = art["paragraphs"]
         except Exception:
             pass
         if not item.get("image") or not item["image"].strip():
-            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], '')
         return item
 
     if candidates:
@@ -523,7 +523,68 @@ def share_api_endpoint(request: Request, id: Optional[str] = Query(None), articl
     return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
 
 @app.get("/api/article")
-def get_article(request: Request, url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
+
+def decode_google_news_url(source_url: str) -> str:
+    if not source_url or 'news.google.com' not in source_url:
+        return source_url
+    try:
+        parsed = urllib.parse.urlparse(source_url)
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) < 2 or parts[0] != "rss" or parts[1] != "articles":
+            if "articles" in parts:
+                art_id = parts[parts.index("articles") + 1]
+            else:
+                return source_url
+        else:
+            art_id = parts[2]
+
+        param_url = f"https://news.google.com/rss/articles/{art_id}?hl=bn&gl=BD&ceid=BD:bn"
+        req = urllib.request.Request(param_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"})
+        with urllib.request.urlopen(req, timeout=3.5) as r:
+            html = r.read().decode("utf-8", errors="ignore")
+
+        sg_m = re.search(r'data-n-a-sg="([^"]+)"', html)
+        ts_m = re.search(r'data-n-a-ts="([^"]+)"', html)
+        if not sg_m or not ts_m:
+            return source_url
+
+        sg = sg_m.group(1)
+        ts = ts_m.group(1)
+
+        ctx = [["X", "X", ["X", "X"], None, None, 1, 1, "US:en", None, 1, None, None, None, None, None, 0, 1], "X", "X", 1, [1, 1, 1], 1, 1, None, 0, 0, None, 0]
+        inner = ["garturlreq", ctx, art_id, int(ts) if str(ts).isdigit() else ts, sg]
+        envelope = [["Fbv4je", json.dumps(inner, separators=(",", ":")), None, "1"]]
+        body = f"f.req={urllib.parse.quote(json.dumps([envelope], separators=(',', ':')))}"
+
+        post_req = urllib.request.Request(
+            "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+            data=body.encode("utf-8"),
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
+            }
+        )
+        with urllib.request.urlopen(post_req, timeout=3.5) as resp:
+            text = resp.read().decode("utf-8", errors="ignore")
+            if "\n\n" in text:
+                text = text.split("\n\n", 1)[1]
+            text = text.lstrip()
+            if text.startswith(")]}\'"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[4:]
+                text = text.lstrip()
+            rows = json.loads(text)
+            for row in rows:
+                if isinstance(row, list) and len(row) >= 3:
+                    payload = row[2]
+                    if isinstance(payload, str):
+                        payload = json.loads(payload)
+                    if isinstance(payload, list) and len(payload) > 1 and payload[0] == "garturlres":
+                        return payload[1]
+    except Exception:
+        pass
+    return source_url
+
+def get_article(request: Optional[Request] = None, url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
     if article_id and not url:
         ua = request.headers.get("user-agent", "") if request else ""
         return render_social_share_page(article_id=article_id, direct_link=None, user_agent=ua)
@@ -548,35 +609,40 @@ def get_article(request: Request, url: Optional[str] = Query(None), source_id: O
         except Exception:
             pass
 
-    # 0. Check admin articles database
-    if '/article/' in url or (source_id and 'newsbangla' in source_id):
-        try:
-            admin_arts = read_persisted_admin_articles()
-            for a in admin_arts:
-                if a.get('link') == url or a.get('id') in url or (title_hint and a.get('title') == title_hint):
-                    return {
-                        "title": a.get("title", ""),
-                        "image": a.get("image", ""),
-                        "paragraphs": a.get("paragraphs") or ([a.get("content")] if a.get("content") else [])
-                    }
-        except Exception:
-            pass
-
-    # Decode Google News redirect if needed
-    if 'news.google.com' in real_url:
-        try:
-            from googlenewsdecoder import gnewsdecoder
-            res = gnewsdecoder(real_url)
-            if (res.get('status') or res.get('success')) and res.get('decoded_url'):
-                real_url = res['decoded_url']
-        except Exception:
+    # 1. Special REST API handler for Channel 24 (channel24bd.tv is a React SPA where body is served via backoffice API)
+    if 'channel24bd.tv' in real_url or source_id == 'channel24':
+        m_c24 = re.search(r'/([^/]+)/article/(\d+)', real_url)
+        if m_c24:
+            slug = m_c24.group(1)
+            content_id = m_c24.group(2)
+            c24_api = f"https://backoffice.channel24bd.tv/api/v2/content-details/{slug}/{content_id}"
             try:
-                from googlenewsdecoder import new_decoderv1
-                res = new_decoderv1(real_url)
-                if res.get('status') and res.get('decoded_url'):
-                    real_url = res['decoded_url']
+                c24_req = urllib.request.Request(c24_api, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(c24_req, timeout=3.5) as r:
+                    c24_json = json.loads(r.read().decode('utf-8'))
+                    cd = c24_json.get('contentDetails')
+                    if isinstance(cd, list) and len(cd) > 0:
+                        first = cd[0]
+                        title = first.get('ContentHeading') or title_hint or ""
+                        img_path = first.get('ImageBgPath') or first.get('ImagePlatePath') or first.get('ImageSmPath')
+                        if img_path:
+                            image = f"https://backoffice.channel24bd.tv/media/imgAll/{img_path}"
+                        d_html = first.get('ContentDetails', '')
+                        if d_html:
+                            s = BeautifulSoup(d_html, 'html.parser')
+                            paras = [p.get_text(strip=True) for p in s.find_all(['p', 'div']) if len(p.get_text(strip=True)) > 15]
+                        if paras:
+                            return {
+                                "title": title,
+                                "image": image or BRAND_HD_IMAGES.get('channel24', ''),
+                                "paragraphs": paras[:40]
+                            }
             except Exception:
                 pass
+
+    # 2. Decode Google News redirect if needed
+    if 'news.google.com' in real_url:
+        real_url = decode_google_news_url(real_url)
 
     ua_list = [
         'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
@@ -601,7 +667,6 @@ def get_article(request: Request, url: Optional[str] = Query(None), source_id: O
             except Exception:
                 continue
 
-    # If decoding failed and we are still pointing to google.com, do NOT treat google.com as the article!
     if 'news.google.com' in real_url:
         html_content = ""
 
@@ -636,7 +701,6 @@ def get_article(request: Request, url: Optional[str] = Query(None), source_id: O
                 tag.decompose()
 
             # Extract paragraphs across the document (skipping scripts, nav, headers, and footer)
-            # If an article body container with multiple paragraphs is found, prioritize it; otherwise use soup
             article_body = soup.find(['article', 'main'])
             if not article_body or len(article_body.find_all('p')) < 2:
                 for candidate_div in soup.find_all('div', class_=re.compile(r'(content|detail|story|news-detail|post-content|article-content|body|jw-detail)', re.I)):
@@ -659,7 +723,6 @@ def get_article(request: Request, url: Optional[str] = Query(None), source_id: O
                         seen_paras.add(txt)
                         paras.append(txt)
 
-            # If still fewer than 2 paragraphs, check og:description, twitter:description, and meta description
             if len(paras) < 2:
                 for meta_name in ['og:description', 'twitter:description', 'description']:
                     meta_tag = soup.find('meta', property=meta_name) or soup.find('meta', attrs={'name': meta_name})
@@ -681,17 +744,14 @@ def get_article(request: Request, url: Optional[str] = Query(None), source_id: O
     }
 
 
-
-
-def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, category=None):
+def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, category=None, time_window="when:2h"):
     candidates = []
     seen = set()
     cat_query = ""
     if category and category != 'all' and category in CATEGORY_KEYWORDS:
         cat_query = f" {CATEGORY_KEYWORDS[category]}"
     
-    # Strictly query freshest news using when:2h, fall back to when:6h
-    query = f"site:{query_site}{cat_query} when:2h"
+    query = f"site:{query_site}{cat_query} {time_window}".strip()
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=bn&gl=BD&ceid=BD:bn"
     try:
@@ -705,19 +765,16 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
                 if t_elem is None or not t_elem.text: continue
                 raw_t = t_elem.text.strip()
                 l = l_elem.text.strip() if (l_elem is not None and l_elem.text) else ''
-                # Clean newspaper suffix from headline
-                clean_t = re.sub(r'\s*[-–|]\s*(প্রথম আলো|bbc|দৈনিক ইত্তেফাক|বাংলাদেশ প্রতিদিন|কালের কণ্ঠ|যুগান্তর|বিডিনিউজ২৪|bdnews24|The Daily Ittefaq|Jugantor|bd-pratidin).*$', '', raw_t, flags=re.I).strip()
+                clean_t = re.sub(r'\s*[-–|]\s*(প্রথম আলো|bbc|দৈনিক ইত্তেফাক|বাংলাদেশ প্রতিদিন|কালের কণ্ঠ|যুগান্তর|বিডিনিউজ২৪|bdnews24|The Daily Ittefaq|Jugantor|bd-pratidin|এনটিভি|ntv).*$', '', raw_t, flags=re.I).strip()
                 if not is_clean_headline(clean_t, l) or l in seen: continue
                 seen.add(l)
 
                 dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
                 if not dt_obj: continue
                 article_ts = int(dt_obj.timestamp())
-                # Discard any news older than 24 hours immediately (and reject bad ancient dates)
                 if article_ts < (now_ts - 24 * 3600) or article_ts > (now_ts + 3600):
                     continue
 
-                # Check RSS media/thumbnail
                 feed_img = ""
                 m_c = it.find('{http://search.yahoo.com/mrss/}content')
                 if m_c is not None and 'url' in m_c.attrib:
@@ -747,41 +804,37 @@ def fetch_google_site_rss(query_site, s_id, s_name, s_badge, s_color, now_ts, ca
     except Exception:
         pass
 
-    # 1. Filter out non-news, e-magazines, and unwanted placeholders
     candidates = [c for c in candidates if not any(k in c['title'].lower() for k in ['revalidate', 'emagazine', 'e-paper', 'ই-পেপার', 'বিজ্ঞাপন', 'highest circulated newspaper', 'bangladesh pratidin ||', 'kalerkantho ||', 'পত্রিকা ২০', 'পত্রিকা 20'])]
-
-    # 2. Sort candidates chronologically FIRST so the freshest news gets enriched
     candidates.sort(key=lambda x: x.get('timestamp') or 0, reverse=True)
 
-    # 3. Enrich items with real og:image and paragraphs concurrently
     def enrich_item(item):
         try:
-            art = get_article(item["link"], item["source_id"], item["title"])
-            if art.get("image") and art["image"].startswith("http"):
+            art = get_article(url=item["link"], source_id=item["source_id"], title_hint=item["title"])
+            if art.get("image") and art["image"].startswith("http") and not any(k in art["image"].lower() for k in ['default', 'logo', 'icon', 'unsplash']):
                 item["image"] = art["image"]
             if art.get("paragraphs") and len(art["paragraphs"]) > 0:
                 item["paragraphs"] = art["paragraphs"]
         except Exception:
             pass
         if not item.get("image") or not item["image"].strip():
-            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
+            item["image"] = BRAND_HD_IMAGES.get(item["source_id"], '')
         return item
 
     if candidates:
-        # Enrich the top 8 freshest news items concurrently with real CDN images & full paragraphs
-        top_slice = candidates[:8]
-        rest_slice = candidates[8:]
+        top_slice = candidates[:10]
+        rest_slice = candidates[10:]
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
                 enriched_top = list(ex.map(enrich_item, top_slice))
         except Exception:
             enriched_top = top_slice
         for it in rest_slice:
             if not it.get("image"):
-                it["image"] = BRAND_HD_IMAGES.get(it["source_id"], 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80')
+                it["image"] = BRAND_HD_IMAGES.get(it["source_id"], '')
         candidates = enriched_top + rest_slice
 
     return candidates
+
 
 def fetch_channel24_live(now_ts, category=None):
     candidates = []
@@ -832,43 +885,16 @@ def fetch_channel24_live(now_ts, category=None):
     return candidates
 
 def fetch_ntv_live(now_ts, category=None):
-    items = fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category)
-    if not items:
-        # Try without when:2h filter for NTV
-        query = "site:ntvbd.com when:1d"
-        rss_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=bn&gl=BD&ceid=BD:bn"
-        try:
-            req = urllib.request.Request(rss_url, headers=headers_browser)
-            with urllib.request.urlopen(req, timeout=3.5) as r:
-                root = ET.fromstring(r.read())
-                for it in root.findall('.//item')[:15]:
-                    t_elem = it.find('title')
-                    l_elem = it.find('link')
-                    pd_elem = it.find('pubDate')
-                    if t_elem is None or not t_elem.text: continue
-                    clean_t = re.sub(r'\s*[-–|]\s*(এনটিভি|ntv).*$', '', t_elem.text.strip(), flags=re.I).strip()
-                    l = l_elem.text.strip() if l_elem is not None else ''
-                    if not is_clean_headline(clean_t, l): continue
-                    dt_obj = parse_iso_or_rfc_date(pd_elem.text) if (pd_elem is not None and pd_elem.text) else None
-                    if not dt_obj: continue
-                    ts = int(dt_obj.timestamp())
-                    if ts < (now_ts - 24 * 3600): continue
-                    items.append({
-                        "id": l,
-                        "title": clean_t,
-                        "link": l,
-                        "timestamp": ts,
-                        "category": detect_cat(clean_t, l),
-                        "source_id": 'ntv',
-                        "source_name": 'এনটিভি (NTV)',
-                        "source_badge": 'NTV',
-                        "source_color": '#16a34a',
-                        "image": BRAND_HD_IMAGES.get('ntv', ''),
-                        "paragraphs": []
-                    })
-        except Exception:
-            pass
+    items = fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category, time_window="when:6h")
+    if len(items) < 8:
+        more = fetch_google_site_rss('ntvbd.com', 'ntv', 'এনটিভি (NTV)', 'NTV', '#16a34a', now_ts, category, time_window="when:1d")
+        seen_links = set(x['link'] for x in items)
+        for m in more:
+            if m['link'] not in seen_links:
+                seen_links.add(m['link'])
+                items.append(m)
     return items
+
 
 def fetch_rtv_live(now_ts, category=None):
     return fetch_google_site_rss('rtvonline.com', 'rtv', 'আরটিভি (RTV)', 'RTV', '#ea580c', now_ts, category)
