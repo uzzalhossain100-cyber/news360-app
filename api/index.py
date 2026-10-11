@@ -1112,20 +1112,27 @@ def get_news(
 # Generates dynamic OpenGraph tags with the real article headline and thumbnail image
 # ---------------------------------------------------------------------------
 def render_social_share_page(article_id: str, direct_link: Optional[str] = None, user_agent: str = ""):
-    import urllib.parse
+    import urllib.parse, hashlib, html
     found_item = None
     target_id = article_id.strip() if article_id else ""
     target_link = direct_link.strip() if direct_link else ""
-
-    # Unquote in case target_id is URL-encoded
     decoded_target = urllib.parse.unquote(target_id)
 
-    import hashlib
+    def js_slug(s):
+        h = 0
+        for c in str(s or "").strip():
+            h = ((h << 5) - h) + ord(c)
+            h &= 0xFFFFFFFF
+            if h >= 0x80000000:
+                h -= 0x100000000
+        return "art_" + hex(abs(h))[2:]
+
     def matches_item(it):
         if not it: return False
         it_id = str(it.get("id") or "").strip()
         it_link = str(it.get("link") or "").strip()
-        
+        it_title = str(it.get("title") or "").strip()
+
         # Exact match
         if target_id and (it_id == target_id or it_id == decoded_target or f"newsbangla-{it_id}" == target_id or f"custom_{it_id}" == target_id):
             return True
@@ -1133,48 +1140,22 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
             return True
         if target_id and (it_link == target_id or it_link == decoded_target):
             return True
-        
-        # 32-bit int hash match (matches generateSafeArticleSlug)
-        def js_slug(s):
-            h = 0
-            for c in s:
-                h = ((h << 5) - h) + ord(c)
-                h &= 0xFFFFFFFF
-                if h >= 0x80000000:
-                    h -= 0x100000000
-            return "art_" + hex(abs(h))[2:]
 
-        if it_link and (target_id == js_slug(it_link) or decoded_target == js_slug(it_link)):
-            return True
-        if it_id and (target_id == js_slug(it_id) or decoded_target == js_slug(it_id)):
-            return True
-
-        # Also support legacy nb_ prefix
-        def legacy_js_hash(s):
-            h = 0
-            for c in s:
-                h = ((h << 5) - h) + ord(c)
-                h &= 0xFFFFFFFF
-                if h >= 0x80000000:
-                    h -= 0x100000000
-            return "nb_" + hex(abs(h))[2:]
-
-        if it_link and (target_id == legacy_js_hash(it_link) or decoded_target == legacy_js_hash(it_link)):
-            return True
-        if it_id and (target_id == legacy_js_hash(it_id) or decoded_target == legacy_js_hash(it_id)):
-            return True
-
-        # MD5 Hash match (art_ and nb_)
-        for prefix in ["art_", "nb_"]:
-            if it_link:
-                if target_id == prefix + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:12] or target_id == prefix + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:10]:
+        # Slug match on title, link, or id
+        for field in [it_title, it_link, it_id]:
+            if field:
+                s = js_slug(field)
+                if target_id == s or decoded_target == s:
                     return True
-            if it_id:
-                if target_id == prefix + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:12] or target_id == prefix + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:10]:
-                    return True
+                # MD5 hash match
+                for pfx in ["art_", "nb_"]:
+                    m12 = pfx + hashlib.md5(field.encode("utf-8")).hexdigest()[:12]
+                    m10 = pfx + hashlib.md5(field.encode("utf-8")).hexdigest()[:10]
+                    if target_id == m12 or target_id == m10 or decoded_target == m12 or decoded_target == m10:
+                        return True
         return False
 
-    # 1. Search in Admin Persisted Articles
+    # 1. Search Admin Persisted Articles
     try:
         admin_articles = read_persisted_admin_articles()
         for a in admin_articles:
@@ -1184,7 +1165,25 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     except Exception:
         pass
 
-    # 2. Search in Pristine Catalog
+    # 2. Search Live Cached News (from live scrapers)
+    if not found_item:
+        try:
+            for k, val in LIVE_CACHE.items():
+                items = []
+                if isinstance(val, dict):
+                    items = val.get("data") or val.get("news") or []
+                elif isinstance(val, list):
+                    items = val
+                for it in items:
+                    if matches_item(it):
+                        found_item = it
+                        break
+                if found_item:
+                    break
+        except Exception:
+            pass
+
+    # 3. Search Pristine Catalog
     if not found_item:
         try:
             catalog = load_pristine_catalog()
@@ -1195,7 +1194,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         except Exception:
             pass
 
-    # 3. If target_id or decoded_target looks like an external newspaper URL, scrape og:title and og:image on the fly!
+    # 4. If target is a direct URL, fetch on the fly
     if not found_item and (decoded_target.startswith("http://") or decoded_target.startswith("https://")):
         try:
             art_data = get_article(url=decoded_target)
@@ -1209,19 +1208,18 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         except Exception:
             pass
 
-    # 3. Fallback defaults
     if found_item:
         raw_title = found_item.get("title", "তাজা সংবাদ - NewsBangla")
         title = re.sub(r'\s*[-–|].*$', '', raw_title).strip()
         paras = found_item.get("paragraphs", [])
         desc = paras[0][:220] if paras else f"{title} সম্পর্কে বিস্তারিত খবর ও আপডেট পড়ুন NewsBangla-তে।"
         raw_image = found_item.get("image") or ""
-        
-        # If image is base64 data URI, route through /api/article-image/{id}
-        if raw_image.startswith("data:"):
-            image = f"https://newsbangla.vercel.app/api/article-image/{target_id}"
+
+        # For admin custom articles (or data URI images), route via /api/article-image/{id}
+        if raw_image.startswith("data:") or str(found_item.get("id") or "").startswith("custom_"):
+            clean_art_id = str(found_item.get("id") or target_id)
+            image = f"https://newsbangla.vercel.app/api/article-image/{clean_art_id}"
         elif raw_image.startswith("http"):
-            # Direct authentic image CDN url (Facebook crawler caches and renders this reliably!)
             image = raw_image
         else:
             image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
@@ -1233,12 +1231,11 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     canonical_share_url = f"https://newsbangla.vercel.app/article/{target_id or 'news'}"
     app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
 
-    import html
     escaped_title = html.escape(title)
     escaped_desc = html.escape(desc)
     escaped_image = html.escape(image)
 
-    # Check if visitor is a social media preview crawler bot
+    # Detect Facebook crawler or bots
     ua_lower = (user_agent or "").lower()
     is_crawler = any(bot in ua_lower for bot in [
         "facebookexternalhit", "facebot", "facebook", "whatsapp", "meta-externalagent",
@@ -1248,7 +1245,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 
     redirect_script = ""
     if not is_crawler:
-        # For actual human users: instantly navigate to main app and open the article modal!
+        # Instant redirect for human readers
         redirect_script = f"""
     <meta http-equiv="refresh" content="0;url={app_redirect_url}">
     <script>
@@ -1264,7 +1261,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     <title>{escaped_title} | NewsBangla</title>
     <meta name="description" content="{escaped_desc}">
 
-    <!-- Open Graph / Facebook / WhatsApp / Messenger -->
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="article">
     <meta property="og:site_name" content="NewsBangla">
     <meta property="og:url" content="{canonical_share_url}">
@@ -1292,79 +1289,15 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     </div>
 </body>
 </html>"""
-    return HTMLResponse(content=html_content, status_code=200)
 
-@app.get("/api/article-meta/{article_id}")
-def get_article_meta_endpoint(article_id: str):
-    target_id = article_id.strip()
-    found = None
-    try:
-        admin_articles = read_persisted_admin_articles()
-        for a in admin_articles:
-            if a.get("id") == target_id:
-                return a
-    except Exception:
-        pass
-
-    try:
-        catalog = load_pristine_catalog()
-        for it in catalog:
-            link = str(it.get("link") or "").strip()
-            # 32-bit int hash match
-            h = 0
-            for c in link:
-                h = ((h << 5) - h) + ord(c)
-                h &= 0xFFFFFFFF
-                if h >= 0x80000000:
-                    h -= 0x100000000
-            slug = "art_" + hex(abs(h))[2:]
-            if slug == target_id or it.get("id") == target_id or link == target_id:
-                return it
-    except Exception:
-        pass
-
-    return JSONResponse(status_code=404, content={"error": "Not found"})
-
-@app.get("/api/article-meta/{article_id}")
-def get_article_meta_endpoint(article_id: str):
-    target_id = article_id.strip()
-    found = None
-    try:
-        admin_articles = read_persisted_admin_articles()
-        for a in admin_articles:
-            if a.get("id") == target_id:
-                return a
-    except Exception:
-        pass
-
-    try:
-        catalog = load_pristine_catalog()
-        for it in catalog:
-            link = str(it.get("link") or "").strip()
-            # 32-bit int hash match
-            h = 0
-            for c in link:
-                h = ((h << 5) - h) + ord(c)
-                h &= 0xFFFFFFFF
-                if h >= 0x80000000:
-                    h -= 0x100000000
-            slug = "art_" + hex(abs(h))[2:]
-            if slug == target_id or it.get("id") == target_id or link == target_id:
-                return it
-    except Exception:
-        pass
-
-    return JSONResponse(status_code=404, content={"error": "Not found"})
-
-@app.get("/article/{article_id:path}")
-def direct_article_share_endpoint(article_id: str, request: Request):
-    try:
-        user_agent = request.headers.get("user-agent", "")
-        return render_social_share_page(article_id=article_id, direct_link=None, user_agent=user_agent)
-    except Exception as e:
-        import traceback
-        err_msg = traceback.format_exc()
-        return Response(content="Error: " + err_msg, media_type="text/plain", status_code=200)
+    return Response(
+        content=html_content,
+        media_type="text/html",
+        headers={
+            "Cache-Control": "public, max-age=3600, s-maxage=3600",
+            "Content-Type": "text/html; charset=utf-8"
+        }
+    )
 
 @app.get("/api/share-image")
 def share_image_proxy(url: str = Query(...)):
@@ -1436,7 +1369,14 @@ def serve_article_image(article_id: str):
                 if "png" in header: mime = "image/png"
                 elif "webp" in header: mime = "image/webp"
                 binary_data = base64.b64decode(b64_data)
-                return Response(content=binary_data, media_type=mime)
+                return Response(
+                    content=binary_data,
+                    media_type=mime,
+                    headers={
+                        "Cache-Control": "public, max-age=86400, s-maxage=86400",
+                        "Content-Type": mime
+                    }
+                )
             except Exception:
                 pass
         elif img_str.startswith("http"):
