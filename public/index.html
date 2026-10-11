@@ -3429,44 +3429,185 @@ function openArticleModal(item) {
         });
     }
 
+        // ==========================================
+    // BENGALI FEMALE VOICE READER ENGINE (TTS)
+    // Bangladeshi Female Voice: bn-BD-NabanitaNeural
+    // ==========================================
+    let isSpeaking = false;
+    let globalAudioPlayer = null;
+    let speechUtteranceList = [];
+    let currentSpeechIndex = 0;
+
+    function updateSpeechUI(active) {
+      const btn = document.getElementById('ttsSpeakBtn');
+      const text = document.getElementById('ttsBtnText');
+      if (btn) {
+        if (active) {
+          btn.style.background = '#dc2626';
+          btn.style.borderColor = '#dc2626';
+          btn.style.color = '#ffffff';
+        } else {
+          btn.style.background = '';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }
+      }
+      if (text) {
+        text.innerText = active ? 'পড়া থামান' : 'খবরটি শুনুন';
+      }
+    }
+
+    function sanitizeTextForSpeech(str) {
+      if (!str) return '';
+      let clean = str.replace(/<[^>]*>/g, '');
+      clean = clean.replace(/https?:\/\/\S+/gi, '');
+      clean = clean.replace(/www\.\S+/gi, '');
+      clean = clean.replace(/\*\*/g, '');
+      clean = clean.replace(/[a-zA-Z0-9_\-\.\/]{10,}/g, '');
+      return clean.trim();
+    }
+
+    function stopSpeaking() {
+      if (globalAudioPlayer) {
+        try {
+          globalAudioPlayer.pause();
+          globalAudioPlayer.removeAttribute('src');
+          globalAudioPlayer.load();
+        } catch(e) {}
+        globalAudioPlayer = null;
+      }
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch(e) {}
+      }
+      if (window.AndroidTTS && typeof window.AndroidTTS.stop === 'function') {
+        window.AndroidTTS.stop();
+      }
+      isSpeaking = false;
+      speechUtteranceList = [];
+      currentSpeechIndex = 0;
+      updateSpeechUI(false);
+    }
+
+    function playNextSentenceWeb() {
+      if (!isSpeaking || currentSpeechIndex >= speechUtteranceList.length) {
+        stopSpeaking();
+        return;
+      }
+
+      const sentence = speechUtteranceList[currentSpeechIndex];
+      if (!sentence || !sentence.trim()) {
+        currentSpeechIndex++;
+        playNextSentenceWeb();
+        return;
+      }
+
+      const ttsUrl = '/api/tts?text=' + encodeURIComponent(sentence);
+
+      if (globalAudioPlayer) {
+        try {
+          globalAudioPlayer.pause();
+        } catch(e) {}
+      }
+
+      const audio = new Audio(ttsUrl);
+      globalAudioPlayer = audio;
+
+      audio.onended = function() {
+        if (!isSpeaking) return;
+        currentSpeechIndex++;
+        playNextSentenceWeb();
+      };
+
+      audio.onerror = function() {
+        // Fallback to browser Web Speech API with Bangladeshi voice
+        if (!isSpeaking) return;
+        if ('speechSynthesis' in window) {
+          try {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(sentence);
+            utter.lang = 'bn-BD';
+            const voices = window.speechSynthesis.getVoices() || [];
+            const bnVoice = voices.find(v => (v.lang === 'bn-BD' || v.lang === 'bn_BD' || v.lang.startsWith('bn')) && (v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Bengali')));
+            if (bnVoice) utter.voice = bnVoice;
+            utter.pitch = 1.15;
+            utter.rate = 0.95;
+            utter.onended = function() {
+              if (!isSpeaking) return;
+              currentSpeechIndex++;
+              playNextSentenceWeb();
+            };
+            utter.onerror = function() {
+              if (!isSpeaking) return;
+              currentSpeechIndex++;
+              playNextSentenceWeb();
+            };
+            window.speechSynthesis.speak(utter);
+            return;
+          } catch(e) {}
+        }
+        currentSpeechIndex++;
+        playNextSentenceWeb();
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(function() {
+          // In case of autoplay policy, fallback
+          if ('speechSynthesis' in window) {
+            const utter = new SpeechSynthesisUtterance(sentence);
+            utter.lang = 'bn-BD';
+            utter.pitch = 1.15;
+            utter.rate = 0.95;
+            utter.onended = function() {
+              if (!isSpeaking) return;
+              currentSpeechIndex++;
+              playNextSentenceWeb();
+            };
+            utter.onerror = function() {
+              if (!isSpeaking) return;
+              currentSpeechIndex++;
+              playNextSentenceWeb();
+            };
+            window.speechSynthesis.speak(utter);
+          }
+        });
+      }
+    }
+
     function toggleSpeech() {
       if (isSpeaking) {
         stopSpeaking();
         return;
       }
 
-      const rawTitle = document.getElementById('modalArticleTitle').innerText;
+      const rawTitle = (document.getElementById('modalArticleTitle') || {}).innerText || '';
       const rawParas = Array.from(document.querySelectorAll('#modalArticleParagraphs p')).map(p => p.innerText.trim()).filter(Boolean);
       
       const fullSentences = [];
       const cleanTitle = sanitizeTextForSpeech(rawTitle);
       if (cleanTitle) {
-        fullSentences.push('শিরোনাম: ' + cleanTitle);
+        fullSentences.push('শিরোনাম, ' + cleanTitle);
       }
 
       rawParas.forEach(p => {
         const cleanP = sanitizeTextForSpeech(p);
         if (!cleanP) return;
-        // Group full complete sentences till Dari (।) without any intermediate commas or splits
         const sentences = cleanP.split(/[।!?\n]+/).map(s => s.trim()).filter(Boolean);
         fullSentences.push(...sentences);
       });
 
-      if (fullSentences.length === 0) return;
+      if (fullSentences.length === 0) {
+        alert('পড়ে শোনানোর মতো কোনো লেখা পাওয়া যায়নি।');
+        return;
+      }
 
       isSpeaking = true;
       updateSpeechUI(true);
 
-      // Check if inside Android APK
-      if (window.AndroidTTS && typeof window.AndroidTTS.speakFullArticle === 'function') {
-        window.AndroidTTS.speakFullArticle(fullSentences);
-        return;
-      }
-
-      // Laptop / Desktop Browser Web Queue
       speechUtteranceList = fullSentences;
       currentSpeechIndex = 0;
-      nextAudioPreload = null;
       playNextSentenceWeb();
     }
 
