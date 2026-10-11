@@ -1134,8 +1134,23 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         if target_id and (it_link == target_id or it_link == decoded_target):
             return True
         
-        # 32-bit int hash match (same as JS implementation)
-        def js_hash(s):
+        # 32-bit int hash match (matches generateSafeArticleSlug)
+        def js_slug(s):
+            h = 0
+            for c in s:
+                h = ((h << 5) - h) + ord(c)
+                h &= 0xFFFFFFFF
+                if h >= 0x80000000:
+                    h -= 0x100000000
+            return "art_" + hex(abs(h))[2:]
+
+        if it_link and (target_id == js_slug(it_link) or decoded_target == js_slug(it_link)):
+            return True
+        if it_id and (target_id == js_slug(it_id) or decoded_target == js_slug(it_id)):
+            return True
+
+        # Also support legacy nb_ prefix
+        def legacy_js_hash(s):
             h = 0
             for c in s:
                 h = ((h << 5) - h) + ord(c)
@@ -1144,20 +1159,19 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
                     h -= 0x100000000
             return "nb_" + hex(abs(h))[2:]
 
-        if it_link and (target_id == js_hash(it_link) or decoded_target == js_hash(it_link)):
+        if it_link and (target_id == legacy_js_hash(it_link) or decoded_target == legacy_js_hash(it_link)):
             return True
-        if it_id and (target_id == js_hash(it_id) or decoded_target == js_hash(it_id)):
+        if it_id and (target_id == legacy_js_hash(it_id) or decoded_target == legacy_js_hash(it_id)):
             return True
 
-        # MD5 Hash match
-        if it_link:
-            h = "nb_" + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:10]
-            if target_id == h or decoded_target == h:
-                return True
-        if it_id:
-            h2 = "nb_" + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:10]
-            if target_id == h2 or decoded_target == h2:
-                return True
+        # MD5 Hash match (art_ and nb_)
+        for prefix in ["art_", "nb_"]:
+            if it_link:
+                if target_id == prefix + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:12] or target_id == prefix + hashlib.md5(it_link.encode("utf-8")).hexdigest()[:10]:
+                    return True
+            if it_id:
+                if target_id == prefix + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:12] or target_id == prefix + hashlib.md5(it_id.encode("utf-8")).hexdigest()[:10]:
+                    return True
         return False
 
     # 1. Search in Admin Persisted Articles
@@ -1207,9 +1221,8 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         if raw_image.startswith("data:"):
             image = f"https://newsbangla.vercel.app/api/article-image/{target_id}"
         elif raw_image.startswith("http"):
-            # Route external newspaper image through server proxy to bypass Facebook CDN blocks/hotlink protections
-            encoded_img = urllib.parse.quote(raw_image, safe="")
-            image = f"https://newsbangla.vercel.app/api/share-image?url={encoded_img}"
+            # Direct authentic image CDN url (Facebook crawler caches and renders this reliably!)
+            image = raw_image
         else:
             image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
     else:

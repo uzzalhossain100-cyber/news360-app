@@ -3059,17 +3059,28 @@
     let currentModalArticle = null;
 
     // Helper to generate a reliable direct deep-link URL for any article
+    function generateSafeArticleSlug(item) {
+      if (!item) return 'news';
+      // If custom admin article, use custom_<id>
+      if (item.id && (String(item.id).startsWith('custom_') || String(item.id).startsWith('newsbangla_'))) {
+        return String(item.id);
+      }
+      // Compute deterministic safe slug from link or id
+      const raw = String(item.link || item.id || '');
+      let hash = 0;
+      for (let i = 0; i < raw.length; i++) {
+        const char = raw.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return 'art_' + Math.abs(hash).toString(16);
+    }
+
     function getArticleDirectShareUrl(item) {
       if (!item) return window.location.href;
       const baseUrl = 'https://newsbangla.vercel.app';
-      // Always route via /article/<id> so Facebook, WhatsApp, etc. fetch server-side Open Graph tags (OG Title, OG Image)
-      if (item.id) {
-        return baseUrl + '/article/' + encodeURIComponent(item.id);
-      }
-      if (item.link) {
-        return baseUrl + '/article/' + encodeURIComponent(item.link);
-      }
-      return baseUrl;
+      const slug = generateSafeArticleSlug(item);
+      return baseUrl + '/article/' + slug;
     }
 
     function shareArticleTo(channel) {
@@ -3077,7 +3088,7 @@
 
       const title = currentModalArticle.title || 'সংবাদ শিরোনাম';
       const shareUrl = getArticleDirectShareUrl(currentModalArticle);
-      const textToShare = title + '\n\nNewsBangla-এ বিস্তারিত খবর পড়ুন:\n' + shareUrl;
+      const textToShare = title + '\n' + shareUrl;
 
       // 1. If running inside Android App WebView with AndroidTTS / native bridge
       if (window.AndroidTTS && typeof window.AndroidTTS.shareArticle === 'function') {
@@ -3188,11 +3199,16 @@
         function tryFindAndOpen() {
           let found = null;
           if (articleId) {
-            found = allNewsItems.find(it => it.id === articleId || it.id === decodeURIComponent(articleId) || (it.link && it.link === articleId));
+            const target = decodeURIComponent(articleId);
+            found = allNewsItems.find(it => {
+              if (it.id === target || it.link === target) return true;
+              if (generateSafeArticleSlug(it) === target) return true;
+              return false;
+            });
           }
           if (!found && articleLink) {
             const decLink = decodeURIComponent(articleLink);
-            found = allNewsItems.find(it => it.link === decLink || it.id === decLink);
+            found = allNewsItems.find(it => it.link === decLink || it.id === decLink || generateSafeArticleSlug(it) === decLink);
           }
 
           if (found) {
