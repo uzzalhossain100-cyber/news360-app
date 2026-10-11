@@ -3206,57 +3206,37 @@
         if (!articleId && !articleLink) return;
 
         // If articleId is an fb_ self-contained token, unpack it immediately!
+        let tokenData = null;
         if (articleId && articleId.startsWith('fb_')) {
           try {
             const b64 = articleId.substring(3).replace(/-/g, '+').replace(/_/g, '/');
             const jsonStr = decodeURIComponent(Array.prototype.map.call(atob(b64), function(c) {
               return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
             }).join(''));
-            const data = JSON.parse(jsonStr);
-            if (data && data.t) {
-              let realTargetId = '';
-              if (data.l && data.l.indexOf('?article=') !== -1) {
-                realTargetId = decodeURIComponent(data.l.split('?article=')[1].split('&')[0]);
-              } else if (data.l && data.l.indexOf('/article/') !== -1) {
-                realTargetId = decodeURIComponent(data.l.split('/article/')[1].split('?')[0]);
-              }
-
-              let existing = null;
-              if (realTargetId) {
-                existing = allNewsItems.find(it => it.id === realTargetId || String(it.id).endsWith(realTargetId));
-                if (!existing) {
-                  const customList = getAdminCustomArticles();
-                  existing = customList.find(it => it.id === realTargetId || String(it.id).endsWith(realTargetId));
-                }
-              }
-
-              if (existing) {
-                openArticleModal(existing);
-                return;
-              }
-
-              const matchedItem = {
-                id: realTargetId || articleId,
-                title: data.t,
-                image: data.i || '',
-                link: data.l || '',
-                source_name: data.s || 'NewsBangla',
-                source_id: 'newsbangla',
-                category: 'national',
-                is_custom: true,
-                paragraphs: []
-              };
-              openArticleModal(matchedItem);
-              return;
-            }
+            tokenData = JSON.parse(jsonStr);
           } catch(e) {
             console.warn('Failed to unpack fb_ token:', e);
           }
         }
 
-        const target = decodeURIComponent(articleId || articleLink);
+        let target = '';
+        if (tokenData) {
+          if (tokenData.l && tokenData.l.indexOf('?article=') !== -1) {
+            target = decodeURIComponent(tokenData.l.split('?article=')[1].split('&')[0]);
+          } else if (tokenData.l && tokenData.l.indexOf('/article/') !== -1) {
+            target = decodeURIComponent(tokenData.l.split('/article/')[1].split('?')[0]);
+          } else if (tokenData.l) {
+            target = tokenData.l;
+          } else {
+            target = tokenData.t || articleId;
+          }
+        } else {
+          target = decodeURIComponent(articleId || articleLink || '');
+        }
 
-        function tryFindAndOpen() {
+        if (!target) return;
+
+        function findInCurrentMemory() {
           let found = null;
 
           // 1. Check in allNewsItems
@@ -3264,7 +3244,7 @@
             found = allNewsItems.find(it => {
               if (it.id === target || it.link === target) return true;
               if (String(it.id).endsWith(target) || (target && target.endsWith(String(it.id)))) return true;
-              if (generateSafeArticleSlug(it) === target) return true;
+              if (tokenData && tokenData.t && it.title === tokenData.t) return true;
               return false;
             });
           }
@@ -3276,6 +3256,7 @@
               found = customList.find(it => {
                 if (it.id === target || it.link === target) return true;
                 if (String(it.id).endsWith(target) || (target && target.endsWith(String(it.id)))) return true;
+                if (tokenData && tokenData.t && it.title === tokenData.t) return true;
                 return false;
               });
             }
@@ -3286,47 +3267,73 @@
             found = INITIAL_NEWS_DATA.find(it => {
               if (it.id === target || it.link === target) return true;
               if (String(it.id).endsWith(target) || (target && target.endsWith(String(it.id)))) return true;
+              if (tokenData && tokenData.t && it.title === tokenData.t) return true;
               return false;
             });
           }
 
-          if (found) {
-            openArticleModal(found);
-            return true;
-          }
-          return false;
+          return found;
         }
 
-        // Try immediately
-        if (tryFindAndOpen()) return;
+        // If found in local catalog, open immediately
+        const localFound = findInCurrentMemory();
+        if (localFound) {
+          openArticleModal(localFound);
+          return;
+        }
 
-        // Try after small delays as feeds load
-        setTimeout(function() { if (!tryFindAndOpen()) setTimeout(tryFindAndOpen, 500); }, 200);
+        // If not in local memory, open immediate preview card with token metadata while fetching full content
+        if (tokenData && tokenData.t) {
+          const isCustomArticle = target.startsWith('custom_') || target.startsWith('newsbangla_');
+          const placeholderItem = {
+            id: target,
+            title: tokenData.t,
+            image: tokenData.i || '',
+            link: tokenData.l || target,
+            source_name: tokenData.s || (isCustomArticle ? 'NewsBangla' : 'সংবাদ'),
+            source_id: isCustomArticle ? 'newsbangla' : 'all',
+            category: 'national',
+            is_custom: isCustomArticle,
+            paragraphs: []
+          };
+          openArticleModal(placeholderItem);
+        } else {
+          // If no token data, open modal with loading indicator
+          const pendingItem = {
+            id: target,
+            title: 'খবর লোড হচ্ছে...',
+            image: '',
+            link: target,
+            source_name: 'NewsBangla',
+            source_id: 'newsbangla',
+            category: 'national',
+            is_custom: false,
+            paragraphs: []
+          };
+          openArticleModal(pendingItem);
+        }
 
-        // Server API Fallback: If not found in memory, directly fetch full article from /api/article!
-        setTimeout(function() {
-          if (!isModalOpen) {
-            fetch('/api/article?article_id=' + encodeURIComponent(target) + '&url=' + encodeURIComponent(target))
-              .then(r => r.json())
-              .then(art => {
-                if (art && art.title) {
-                  const fallbackItem = {
-                    id: target,
-                    title: art.title,
-                    image: art.image || '',
-                    link: target.startsWith('http') ? target : ('https://newsbangla.vercel.app/?article=' + target),
-                    source_name: art.source_name || (target.startsWith('custom_') ? 'NewsBangla' : 'সংবাদ'),
-                    source_id: target.startsWith('custom_') ? 'newsbangla' : 'all',
-                    category: 'national',
-                    is_custom: target.startsWith('custom_') || target.startsWith('newsbangla_'),
-                    paragraphs: art.paragraphs || []
-                  };
-                  openArticleModal(fallbackItem);
-                }
-              })
-              .catch(err => console.warn('Server article lookup failed:', err));
-          }
-        }, 800);
+        // Directly fetch full article details from backend /api/article
+        const apiUrl = '/api/article?article_id=' + encodeURIComponent(target) + '&url=' + encodeURIComponent(target) + (tokenData && tokenData.t ? ('&title_hint=' + encodeURIComponent(tokenData.t)) : '');
+        fetch(apiUrl)
+          .then(r => r.json())
+          .then(art => {
+            if (art && (art.title || (art.paragraphs && art.paragraphs.length > 0))) {
+              const fullItem = {
+                id: target,
+                title: art.title || (tokenData ? tokenData.t : 'সংবাদ'),
+                image: art.image || (tokenData ? tokenData.i : ''),
+                link: target.startsWith('http') ? target : ('https://newsbangla.vercel.app/?article=' + target),
+                source_name: art.source_name || (tokenData ? tokenData.s : (target.startsWith('custom_') ? 'NewsBangla' : 'সংবাদ')),
+                source_id: target.startsWith('custom_') ? 'newsbangla' : (art.source_id || 'all'),
+                category: art.category || 'national',
+                is_custom: target.startsWith('custom_') || target.startsWith('newsbangla_'),
+                paragraphs: (art.paragraphs && art.paragraphs.length > 0) ? art.paragraphs : (tokenData ? [tokenData.t] : [])
+              };
+              openArticleModal(fullItem);
+            }
+          })
+          .catch(err => console.warn('Server article lookup failed:', err));
 
       } catch (e) {
         console.warn('URL routing check error:', e);
