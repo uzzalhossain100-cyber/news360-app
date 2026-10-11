@@ -1410,12 +1410,9 @@ def serve_article_image(article_id: str = "", id: Optional[str] = Query(None)):
     target_id = (article_id or id or "").strip()
     found_item = None
     
-    # 1. Search in local files directly without relying on any network
-    for p in [
-        os.path.join(os.path.dirname(__file__), "admin_news.json"),
-        os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json"),
-        LOCAL_STATIC_FILE
-    ]:
+    local_p1 = os.path.join(os.path.dirname(__file__), "admin_news.json")
+    local_p2 = os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json")
+    for p in [local_p1, local_p2]:
         if os.path.exists(p):
             try:
                 with open(p, "r", encoding="utf-8") as f:
