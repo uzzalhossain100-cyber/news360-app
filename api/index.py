@@ -1294,6 +1294,68 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 </html>"""
     return HTMLResponse(content=html_content, status_code=200)
 
+@app.get("/api/article-meta/{article_id}")
+def get_article_meta_endpoint(article_id: str):
+    target_id = article_id.strip()
+    found = None
+    try:
+        admin_articles = read_persisted_admin_articles()
+        for a in admin_articles:
+            if a.get("id") == target_id:
+                return a
+    except Exception:
+        pass
+
+    try:
+        catalog = load_pristine_catalog()
+        for it in catalog:
+            link = str(it.get("link") or "").strip()
+            # 32-bit int hash match
+            h = 0
+            for c in link:
+                h = ((h << 5) - h) + ord(c)
+                h &= 0xFFFFFFFF
+                if h >= 0x80000000:
+                    h -= 0x100000000
+            slug = "art_" + hex(abs(h))[2:]
+            if slug == target_id or it.get("id") == target_id or link == target_id:
+                return it
+    except Exception:
+        pass
+
+    return JSONResponse(status_code=404, content={"error": "Not found"})
+
+@app.get("/api/article-meta/{article_id}")
+def get_article_meta_endpoint(article_id: str):
+    target_id = article_id.strip()
+    found = None
+    try:
+        admin_articles = read_persisted_admin_articles()
+        for a in admin_articles:
+            if a.get("id") == target_id:
+                return a
+    except Exception:
+        pass
+
+    try:
+        catalog = load_pristine_catalog()
+        for it in catalog:
+            link = str(it.get("link") or "").strip()
+            # 32-bit int hash match
+            h = 0
+            for c in link:
+                h = ((h << 5) - h) + ord(c)
+                h &= 0xFFFFFFFF
+                if h >= 0x80000000:
+                    h -= 0x100000000
+            slug = "art_" + hex(abs(h))[2:]
+            if slug == target_id or it.get("id") == target_id or link == target_id:
+                return it
+    except Exception:
+        pass
+
+    return JSONResponse(status_code=404, content={"error": "Not found"})
+
 @app.get("/article/{article_id:path}")
 def direct_article_share_endpoint(article_id: str, request: Request):
     try:

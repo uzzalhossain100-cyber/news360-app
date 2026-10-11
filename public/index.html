@@ -3220,11 +3220,20 @@
 
         // Try immediately
         if (!tryFindAndOpen()) {
-          // Retry after API news load completes
-          setTimeout(tryFindAndOpen, 600);
-          setTimeout(tryFindAndOpen, 1400);
-          setTimeout(tryFindAndOpen, 2500);
-          setTimeout(tryFindAndOpen, 4000);
+          setTimeout(tryFindAndOpen, 300);
+          setTimeout(tryFindAndOpen, 800);
+          setTimeout(tryFindAndOpen, 1600);
+          setTimeout(function() {
+            if (!tryFindAndOpen() && articleId) {
+              fetch('/api/article-meta/' + encodeURIComponent(articleId))
+                .then(r => r.json())
+                .then(art => {
+                  if (art && art.title) {
+                    openArticleModal(art);
+                  }
+                }).catch(() => {});
+            }
+          }, 2400);
         }
       } catch (e) {
         console.warn('URL routing check error:', e);
