@@ -3213,14 +3213,38 @@
             }).join(''));
             const data = JSON.parse(jsonStr);
             if (data && data.t) {
+              // Extract real id from data.l if present
+              let realTargetId = '';
+              if (data.l && data.l.indexOf('?article=') !== -1) {
+                realTargetId = decodeURIComponent(data.l.split('?article=')[1].split('&')[0]);
+              } else if (data.l && data.l.indexOf('/article/') !== -1) {
+                realTargetId = decodeURIComponent(data.l.split('/article/')[1].split('?')[0]);
+              }
+
+              // Check if we can find this article in allNewsItems or custom articles first
+              let existing = null;
+              if (realTargetId) {
+                existing = allNewsItems.find(it => it.id === realTargetId || String(it.id).endsWith(realTargetId));
+                if (!existing) {
+                  const customList = getAdminCustomArticles();
+                  existing = customList.find(it => it.id === realTargetId || String(it.id).endsWith(realTargetId));
+                }
+              }
+
+              if (existing) {
+                openArticleModal(existing);
+                return;
+              }
+
               const matchedItem = {
-                id: articleId,
+                id: realTargetId || articleId,
                 title: data.t,
                 image: data.i || '',
                 link: data.l || '',
                 source_name: data.s || 'NewsBangla',
                 source_id: 'newsbangla',
                 category: 'national',
+                is_custom: true,
                 paragraphs: []
               };
               openArticleModal(matchedItem);
@@ -3415,9 +3439,35 @@ function openArticleModal(item) {
             container.appendChild(pElem);
           });
         } else {
-          const pElem = document.createElement('p');
-          pElem.innerHTML = renderFormattedNewsText(item.title);
-          container.appendChild(pElem);
+          // If paragraphs empty on shared custom article, fetch live details from server
+          modalLoading.style.display = 'block';
+          modalContent.style.display = 'none';
+          fetch('/api/article?article_id=' + encodeURIComponent(item.id || '') + '&url=' + encodeURIComponent(item.link || item.id || ''))
+            .then(r => r.json())
+            .then(data => {
+              modalLoading.style.display = 'none';
+              modalContent.style.display = 'block';
+              container.innerHTML = '';
+              const paras = (data && data.paragraphs && data.paragraphs.length > 0) ? data.paragraphs : [item.title];
+              paras.forEach(function(p) {
+                const pElem = document.createElement('p');
+                pElem.style.margin = '0 0 14px 0';
+                pElem.style.lineHeight = '1.8';
+                pElem.innerHTML = renderFormattedNewsText(p);
+                container.appendChild(pElem);
+              });
+              if (data && data.image && !item.image) {
+                modalImg.src = data.image;
+              }
+            })
+            .catch(() => {
+              modalLoading.style.display = 'none';
+              modalContent.style.display = 'block';
+              container.innerHTML = '';
+              const pElem = document.createElement('p');
+              pElem.innerHTML = renderFormattedNewsText(item.title);
+              container.appendChild(pElem);
+            });
         }
         return;
       }

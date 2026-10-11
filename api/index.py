@@ -595,15 +595,25 @@ def get_article(request: Request = None, url: Optional[str] = Query(None), sourc
     image = ""
     real_url = url
 
-    # 0. Check admin articles database
-    if '/article/' in url or (source_id and 'newsbangla' in source_id):
+    # 0. Check admin articles database (by url, article_id, custom ID, or title_hint)
+    target_admin_id = article_id or ''
+    if not target_admin_id and url and ('custom_' in url or 'newsbangla' in url or '/article/' in url):
+        target_admin_id = url
+
+    if target_admin_id or (source_id and 'newsbangla' in source_id) or (url and ('/article/' in url or 'custom_' in url)):
         try:
             admin_arts = read_persisted_admin_articles()
             for a in admin_arts:
-                if a.get('link') == url or a.get('id') in url or (title_hint and a.get('title') == title_hint):
+                a_id = str(a.get('id') or '')
+                a_link = str(a.get('link') or '')
+                a_title = str(a.get('title') or '')
+                if (target_admin_id and (a_id == target_admin_id or a_id in target_admin_id or target_admin_id in a_id or a_link == target_admin_id)) or                    (url and (a_link == url or a_id in url or url in a_id)) or                    (title_hint and a_title == title_hint):
+                    img_out = a.get("image", "")
+                    if img_out.startswith("data:"):
+                        img_out = f"https://newsbangla.vercel.app/api/article-image/{a_id}"
                     return {
                         "title": a.get("title", ""),
-                        "image": a.get("image", ""),
+                        "image": img_out,
                         "paragraphs": a.get("paragraphs") or ([a.get("content")] if a.get("content") else [])
                     }
         except Exception:
@@ -1273,8 +1283,13 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         raw_image = found_item.get("image") or ""
 
         # For admin custom articles (or data URI images), route via /api/article-image/{id}
-        if raw_image.startswith("data:") or str(found_item.get("id") or "").startswith("custom_"):
+        # If payload.i was already passed with a full URL, use it; if it points to /api/article-image, proxy or serve directly
+        if raw_image and raw_image.startswith("https://newsbangla.vercel.app/api/article-image/"):
+            image = raw_image
+        elif raw_image.startswith("data:") or str(found_item.get("id") or "").startswith("custom_"):
             clean_art_id = str(found_item.get("id") or target_id)
+            if clean_art_id.startswith("fb_") and found_item.get("link") and "?article=" in found_item["link"]:
+                clean_art_id = found_item["link"].split("?article=")[1].split("&")[0]
             image = f"https://newsbangla.vercel.app/api/article-image/{clean_art_id}"
         elif raw_image.startswith("http"):
             image = raw_image
@@ -1286,7 +1301,17 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         image = "https://media.prothomalo.com/prothomalo-bangla%2F2024-09-22%2F5lwyn5je%2Fdefaultog.jpg"
 
     canonical_share_url = f"https://newsbangla.vercel.app/api/share?id={target_id or 'news'}"
-    app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
+        # Determine true deep-link for human visitors:
+    if found_item and found_item.get("link") and "newsbangla.vercel.app" in found_item["link"] and ("?article=" in found_item["link"] or "/article/" in found_item["link"]):
+        app_redirect_url = found_item["link"]
+    elif found_item and found_item.get("id"):
+        real_id = str(found_item.get("id"))
+        if real_id.startswith("fb_") and found_item.get("link"):
+            app_redirect_url = found_item.get("link")
+        else:
+            app_redirect_url = f"https://newsbangla.vercel.app/?article={real_id}"
+    else:
+        app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
 
     escaped_title = html.escape(title)
     escaped_desc = html.escape(desc)
