@@ -1332,7 +1332,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         content=html_content,
         media_type="text/html",
         headers={
-            "Cache-Control": "public, max-age=3600, s-maxage=3600",
+            "Cache-Control": "public, max-age=0, must-revalidate, no-cache",
             "Content-Type": "text/html; charset=utf-8"
         }
     )
