@@ -1279,11 +1279,11 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         elif raw_image.startswith("http"):
             image = raw_image
         else:
-            image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
+            image = "https://media.prothomalo.com/prothomalo-bangla%2F2024-09-22%2F5lwyn5je%2Fdefaultog.jpg"
     else:
         title = "NewsBangla - তাজা সংবাদ ২৪/৭"
         desc = "বাংলাদেশের সর্বাধুনিক অনলাইন সংবাদ মাধ্যম NewsBangla।"
-        image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
+        image = "https://media.prothomalo.com/prothomalo-bangla%2F2024-09-22%2F5lwyn5je%2Fdefaultog.jpg"
 
     canonical_share_url = f"https://newsbangla.vercel.app/api/share?id={target_id or 'news'}"
     app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"

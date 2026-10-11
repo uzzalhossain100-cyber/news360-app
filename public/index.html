@@ -3071,9 +3071,10 @@
       if (!item) return window.location.href;
       const baseUrl = 'https://newsbangla.vercel.app';
 
-      // If it's an admin custom article, route with its ID
-      if (item.id && (String(item.id).startsWith('custom_') || String(item.id).startsWith('newsbangla_'))) {
-        return baseUrl + '/api/share?id=' + encodeURIComponent(item.id);
+      let targetImg = item.image || '';
+      // If image is a base64 string or custom article, resolve to high-res shareable image URL
+      if (targetImg.startsWith('data:') || (item.id && (String(item.id).startsWith('custom_') || String(item.id).startsWith('newsbangla_')))) {
+        targetImg = baseUrl + '/api/article-image/' + encodeURIComponent(item.id);
       }
 
       // Self-contained immutable token with exact Title, Image, and original Link
@@ -3081,9 +3082,9 @@
       try {
         const payload = {
           t: String(item.title || '').substring(0, 150),
-          i: String(item.image || '').substring(0, 250),
-          l: String(item.link || item.id || '').substring(0, 250),
-          s: String(item.source_name || '')
+          i: String(targetImg).substring(0, 250),
+          l: baseUrl + '/?article=' + encodeURIComponent(item.id || ''),
+          s: String(item.source_name || 'NewsBangla')
         };
         const token = 'fb_' + encodeBase64UrlUnicode(JSON.stringify(payload));
         return baseUrl + '/api/share?id=' + token;
