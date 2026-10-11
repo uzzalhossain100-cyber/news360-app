@@ -523,7 +523,7 @@ def share_api_endpoint(request: Request, id: Optional[str] = Query(None), articl
     return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
 
 @app.get("/api/article")
-def get_article(url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None), request: Optional[Request] = None):
+def get_article(request: Request, url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
     if article_id and not url:
         ua = request.headers.get("user-agent", "") if request else ""
         return render_social_share_page(article_id=article_id, direct_link=None, user_agent=ua)
@@ -1340,11 +1340,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 
 @app.get("/article/{article_id:path}")
 @app.get("/article")
-@app.get("/{article_id:path}")
 def direct_article_share_endpoint(request: Request, article_id: str = ""):
-    # If path is api or static file, don't intercept
-    if article_id.startswith("api/") or article_id.startswith("static/") or "." in article_id.split("/")[-1]:
-        return Response(status_code=404)
     try:
         user_agent = request.headers.get("user-agent", "")
         return render_social_share_page(article_id=article_id, direct_link=None, user_agent=user_agent)
@@ -1403,9 +1399,12 @@ def share_image_proxy(url: str = Query(...)):
         # Fallback redirect to original URL
         return Response(status_code=302, headers={"Location": target_img_url})
 
-@app.get("/api/article-image/{article_id:path}")
 @app.get("/api/article-image")
-def serve_article_image(article_id: str = "", id: Optional[str] = Query(None)):
+def serve_article_image_query(id: Optional[str] = Query(None)):
+    return serve_article_image(id or "")
+
+@app.get("/api/article-image/{article_id}")
+def serve_article_image(article_id: str):
     try:
         import base64
         target_id = (article_id or id or "").strip()
@@ -1594,19 +1593,6 @@ def write_persisted_admin_articles(articles):
         print("GitHub persistence error:", e)
         return False
 
-
-@app.get("/api/share")
-def share_api_endpoint(request: Request, id: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
-    target = id or article_id or ""
-    ua = request.headers.get("user-agent", "")
-    return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
-
-
-@app.get("/api/share")
-def share_api_endpoint(request: Request, id: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
-    target = id or article_id or ""
-    ua = request.headers.get("user-agent", "")
-    return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
 
 @app.get("/api/admin/articles")
 def get_admin_articles():
