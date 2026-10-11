@@ -1174,11 +1174,17 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
             data_bytes = base64.urlsafe_b64decode(padded)
             payload = json.loads(data_bytes.decode("utf-8"))
             if payload and payload.get("t"):
+                target_real_link = payload.get("l", "")
+                target_real_id = ""
+                if "?article=" in target_real_link:
+                    target_real_id = target_real_link.split("?article=")[1].split("&")[0]
+                elif "/article/" in target_real_link:
+                    target_real_id = target_real_link.split("/article/")[1].split("?")[0]
                 found_item = {
-                    "id": target_id,
+                    "id": target_real_id or target_id,
                     "title": payload.get("t", ""),
                     "image": payload.get("i", ""),
-                    "link": payload.get("l", ""),
+                    "link": target_real_link,
                     "source_name": payload.get("s", "NewsBangla"),
                     "paragraphs": []
                 }
@@ -1302,14 +1308,10 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 
     canonical_share_url = f"https://newsbangla.vercel.app/api/share?id={target_id or 'news'}"
         # Determine true deep-link for human visitors:
-    if found_item and found_item.get("link") and "newsbangla.vercel.app" in found_item["link"] and ("?article=" in found_item["link"] or "/article/" in found_item["link"]):
+    if found_item and found_item.get("link") and "newsbangla.vercel.app" in found_item["link"]:
         app_redirect_url = found_item["link"]
-    elif found_item and found_item.get("id"):
-        real_id = str(found_item.get("id"))
-        if real_id.startswith("fb_") and found_item.get("link"):
-            app_redirect_url = found_item.get("link")
-        else:
-            app_redirect_url = f"https://newsbangla.vercel.app/?article={real_id}"
+    elif found_item and found_item.get("id") and not str(found_item.get("id")).startswith("fb_"):
+        app_redirect_url = f"https://newsbangla.vercel.app/?article={found_item['id']}"
     else:
         app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
 
