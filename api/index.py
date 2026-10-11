@@ -1259,7 +1259,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         desc = "বাংলাদেশের সর্বাধুনিক অনলাইন সংবাদ মাধ্যম NewsBangla।"
         image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
 
-    canonical_share_url = f"https://newsbangla.vercel.app/article/{target_id or 'news'}"
+    canonical_share_url = f"https://newsbangla.vercel.app/api/share?id={target_id or 'news'}"
     app_redirect_url = f"https://newsbangla.vercel.app/?article={target_id}" if target_id else "https://newsbangla.vercel.app/"
 
     escaped_title = html.escape(title)
@@ -1274,13 +1274,20 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         "bingbot", "googlebot", "applebot", "discordbot"
     ])
 
-    redirect_script = ""
-    if not is_crawler:
-        # Instant redirect for human readers
-        redirect_script = f"""
-    <meta http-equiv="refresh" content="0;url={app_redirect_url}">
+    # Do NOT put <meta http-equiv="refresh"> in head because Facebook scraper follows it and drops og:image/title!
+    # Human redirect is done via JavaScript at the bottom of the body.
+    body_redirect_js = f"""
     <script>
-        window.location.replace("{app_redirect_url}");
+        // Only redirect real human browsers, never web crawlers or bots
+        (function() {{
+            var ua = (navigator.userAgent || '').toLowerCase();
+            var isBot = /facebook|facebot|meta-external|whatsapp|twitter|telegram|bot|crawler|spider/i.test(ua);
+            if (!isBot) {{
+                setTimeout(function() {{
+                    window.location.replace("{app_redirect_url}");
+                }}, 100);
+            }}
+        }})();
     </script>
 """
 
@@ -1309,8 +1316,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
     <meta name="twitter:title" content="{escaped_title}">
     <meta name="twitter:description" content="{escaped_desc}">
     <meta name="twitter:image" content="{escaped_image}">
-    {redirect_script}
-</head>
+    </head>
 <body style="font-family:'Hind Siliguri', -apple-system, sans-serif; background:#f8fafc; color:#0f172a; padding:40px 20px; text-align:center;">
     <div style="max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
         <img src="{escaped_image}" alt="{escaped_title}" style="max-width:100%; height:auto; border-radius:10px; margin-bottom:16px; object-fit:cover; max-height:300px;">
@@ -1318,6 +1324,7 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         <p style="font-size:14px; color:#475569; line-height:1.6; margin-bottom:20px;">{escaped_desc}</p>
         <a href="{app_redirect_url}" style="display:inline-block; background:#dc2626; color:#ffffff; text-decoration:none; padding:10px 22px; border-radius:30px; font-weight:700; font-size:14px;">সম্পূর্ণ খবর পড়ুন</a>
     </div>
+{body_redirect_js}
 </body>
 </html>"""
 
