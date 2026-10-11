@@ -1,10 +1,10 @@
 {
-  "total_pageviews": 211,
-  "month_pageviews": 104,
-  "year_pageviews": 211,
-  "total_unique": 32,
-  "month_unique": 24,
-  "year_unique": 32,
+  "total_pageviews": 212,
+  "month_pageviews": 105,
+  "year_pageviews": 212,
+  "total_unique": 33,
+  "month_unique": 25,
+  "year_unique": 33,
   "current_month": "2026-10",
   "current_year": "2026",
   "ip_hash_set": [
@@ -71,6 +71,8 @@
     "6d68bf7440a7",
     "571d77911a3f",
     "0fcf92bf83e5",
-    "3793b353c954"
+    "3793b353c954",
+    "a5b39a0bacbb",
+    "641fcd8e9033"
   ]
 }
