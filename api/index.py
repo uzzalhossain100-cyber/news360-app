@@ -522,8 +522,6 @@ def share_api_endpoint(request: Request, id: Optional[str] = Query(None), articl
     ua = request.headers.get("user-agent", "")
     return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
 
-@app.get("/api/article")
-
 def decode_google_news_url(source_url: str) -> str:
     if not source_url or 'news.google.com' not in source_url:
         return source_url
@@ -584,7 +582,9 @@ def decode_google_news_url(source_url: str) -> str:
         pass
     return source_url
 
-def get_article(request: Optional[Request] = None, url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
+@app.get("/api/article")
+
+def get_article(request: Request = None, url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
     if article_id and not url:
         ua = request.headers.get("user-agent", "") if request else ""
         return render_social_share_page(article_id=article_id, direct_link=None, user_agent=ua)
