@@ -1206,7 +1206,9 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
         if raw_image.startswith("data:"):
             image = f"https://newsbangla.vercel.app/api/article-image/{target_id}"
         elif raw_image.startswith("http"):
-            image = raw_image
+            # Route external newspaper image through server proxy to bypass Facebook CDN blocks/hotlink protections
+            encoded_img = urllib.parse.quote(raw_image, safe="")
+            image = f"https://newsbangla.vercel.app/api/share-image?url={encoded_img}"
         else:
             image = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"
     else:
@@ -1287,6 +1289,54 @@ def direct_article_share_endpoint(article_id: str, request: Request):
         import traceback
         err_msg = traceback.format_exc()
         return Response(content="Error: " + err_msg, media_type="text/plain", status_code=200)
+
+@app.get("/api/share-image")
+def share_image_proxy(url: str = Query(...)):
+    import urllib.parse
+    target_img_url = urllib.parse.unquote(url).strip()
+    if not target_img_url.startswith("http"):
+        return Response(status_code=302, headers={"Location": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80"})
+
+    try:
+        req = urllib.request.Request(
+            target_img_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": target_img_url,
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            content_type = resp.headers.get("Content-Type", "image/jpeg")
+            img_data = resp.read()
+            # If webp or gif, convert to JPEG for maximum Facebook compatibility if Pillow available
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(io.BytesIO(img_data))
+                rgb_im = im.convert("RGB")
+                out_io = io.BytesIO()
+                rgb_im.save(out_io, format="JPEG", quality=85)
+                return Response(
+                    content=out_io.getvalue(),
+                    media_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "public, max-age=604800, immutable",
+                        "Content-Type": "image/jpeg"
+                    }
+                )
+            except Exception:
+                return Response(
+                    content=img_data,
+                    media_type=content_type,
+                    headers={
+                        "Cache-Control": "public, max-age=604800, immutable",
+                        "Content-Type": content_type
+                    }
+                )
+    except Exception:
+        # Fallback redirect to original URL
+        return Response(status_code=302, headers={"Location": target_img_url})
 
 @app.get("/api/article-image/{article_id}")
 def serve_article_image(article_id: str):
