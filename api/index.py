@@ -1112,11 +1112,31 @@ def get_news(
 # Generates dynamic OpenGraph tags with the real article headline and thumbnail image
 # ---------------------------------------------------------------------------
 def render_social_share_page(article_id: str, direct_link: Optional[str] = None, user_agent: str = ""):
-    import urllib.parse, hashlib, html
+    import urllib.parse, hashlib, html, base64, json
     found_item = None
     target_id = article_id.strip() if article_id else ""
     target_link = direct_link.strip() if direct_link else ""
     decoded_target = urllib.parse.unquote(target_id)
+
+    # 0. Check if target_id is a self-contained fb_ token
+    if target_id.startswith("fb_") or decoded_target.startswith("fb_"):
+        token_str = (target_id if target_id.startswith("fb_") else decoded_target)[3:]
+        try:
+            # Pad base64url string
+            padded = token_str + "=" * ((4 - len(token_str) % 4) % 4)
+            data_bytes = base64.urlsafe_b64decode(padded)
+            payload = json.loads(data_bytes.decode("utf-8"))
+            if payload and payload.get("t"):
+                found_item = {
+                    "id": target_id,
+                    "title": payload.get("t", ""),
+                    "image": payload.get("i", ""),
+                    "link": payload.get("l", ""),
+                    "source_name": payload.get("s", "NewsBangla"),
+                    "paragraphs": []
+                }
+        except Exception:
+            pass
 
     def js_slug(s):
         h = 0
