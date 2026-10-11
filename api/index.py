@@ -1558,6 +1558,20 @@ def write_persisted_admin_articles(articles):
         print("GitHub persistence error:", e)
         return False
 
+
+@app.get("/api/share")
+def share_api_endpoint(request: Request, id: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
+    target = id or article_id or ""
+    ua = request.headers.get("user-agent", "")
+    return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
+
+
+@app.get("/api/share")
+def share_api_endpoint(request: Request, id: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
+    target = id or article_id or ""
+    ua = request.headers.get("user-agent", "")
+    return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
+
 @app.get("/api/admin/articles")
 def get_admin_articles():
     articles = read_persisted_admin_articles()
