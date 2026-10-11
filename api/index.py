@@ -504,16 +504,16 @@ CATEGORY_KEYWORDS = {
 }
 
 BRAND_HD_IMAGES = {
-    'prothomalo': 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&auto=format&fit=crop&q=80',
-    'bbc': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
-    'channel24': 'https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=800&auto=format&fit=crop&q=80',
-    'ntv': 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=800&auto=format&fit=crop&q=80',
-    'rtv': 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800&auto=format&fit=crop&q=80',
-    'ittefaq': 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&auto=format&fit=crop&q=80',
-    'bdpratidin': 'https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?w=800&auto=format&fit=crop&q=80',
-    'kalerkantho': 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=800&auto=format&fit=crop&q=80',
-    'jugantor': 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800&auto=format&fit=crop&q=80',
-    'bdnews24': 'https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&auto=format&fit=crop&q=80'
+    'prothomalo': 'https://media.prothomalo.com/prothomalo-bangla%2F2024-09-22%2F5lwyn5je%2Fdefaultog.jpg',
+    'bbc': 'https://ichef.bbci.co.uk/news/1200/branded_bengali/262b/live/51c55dd0-b30a-11f1-ba3a-274c672664f6.jpg',
+    'channel24': 'https://www.channel24bd.tv/assets/images/logo.png',
+    'ntv': 'https://www.ntvbd.com/themes/custom/ntv/images/logo.png',
+    'rtv': 'https://rtvonline.com/templates/web-view/images/rtv-fb.png',
+    'ittefaq': 'https://cdn.ittefaqbd.com/contents/cache/images/1200x630x1xx/uploads/media/2026/09/16/ca6612a438b65ffe9f8be67fb15aa947-6aaa1105e473d.jpg',
+    'bdpratidin': 'https://cdn.bd-pratidin.com/public/news_images/2026/09/18/og/1789701998-0d40bb7ae83f974d558d659c20876c94.jpg',
+    'kalerkantho': 'https://asset.kalerkantho.com/public/news_images/2026/09/18/1789701583-a460511caac513608377579870242ab5.jpg',
+    'jugantor': 'https://cdn.jugantor.com/uploads/settings/default_img_1.jpg',
+    'bdnews24': 'https://bangla.bdnews24.com/assets/images/bdnews24-logo-og.png'
 }
 
 @app.get("/api/share")
@@ -523,9 +523,9 @@ def share_api_endpoint(request: Request, id: Optional[str] = Query(None), articl
     return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
 
 @app.get("/api/article")
-def get_article(request: Request, url: Optional[str] = Query(None), article_id: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
+def get_article(url: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None), article_id: Optional[str] = Query(None), request: Optional[Request] = None):
     if article_id and not url:
-        ua = request.headers.get("user-agent", "")
+        ua = request.headers.get("user-agent", "") if request else ""
         return render_social_share_page(article_id=article_id, direct_link=None, user_agent=ua)
     if not url:
         return JSONResponse(status_code=400, content={"error": "url or article_id required"})
@@ -1404,13 +1404,15 @@ def share_image_proxy(url: str = Query(...)):
         return Response(status_code=302, headers={"Location": target_img_url})
 
 @app.get("/api/article-image/{article_id}")
-def serve_article_image(article_id: str):
+@app.get("/api/article-image")
+def serve_article_image(article_id: str = "", id: Optional[str] = Query(None)):
     import base64
+    target_id = (article_id or id or "").strip()
     found_item = None
     try:
         admin_articles = read_persisted_admin_articles()
         for a in admin_articles:
-            if a.get("id") == article_id:
+            if a.get("id") == target_id or a.get("id") == f"custom_{target_id}" or str(a.get("id")).endswith(target_id):
                 found_item = a
                 break
     except Exception:
@@ -1499,25 +1501,31 @@ def read_persisted_admin_articles():
     if _MEM_ADMIN_ARTICLES is not None:
         return _MEM_ADMIN_ARTICLES
 
-    # 1. Try reading from GitHub raw URL directly (Always current across any cloud instance)
+    # 1. Try reading from local file first (fastest and always bundled on Vercel deployment)
+    for p in [
+        LOCAL_STATIC_FILE,
+        os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json"),
+        os.path.join(os.path.dirname(__file__), "admin_news.json")
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) > 0:
+                        return data
+            except Exception:
+                pass
+
+    # 2. Try reading from GitHub raw URL
     try:
         raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{GITHUB_PATH}?_t={int(time.time())}"
         req = urllib.request.Request(raw_url, headers={"User-Agent": "NewsBanglaBackend"})
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        import traceback
-        err_str = f"{type(e).__name__}: {e} -> {traceback.format_exc()}"
-        print("GET_ARTICLE ERROR:", err_str)
-        return {"title": title or title_hint or "", "image": image, "paragraphs": [], "debug_error": err_str, "decoded_url": real_url}
-
-    # 2. Try reading from local public folder
-    if os.path.exists(LOCAL_STATIC_FILE):
-        try:
-            with open(LOCAL_STATIC_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
 
     return []
 
