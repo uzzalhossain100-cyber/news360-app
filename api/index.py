@@ -516,8 +516,19 @@ BRAND_HD_IMAGES = {
     'bdnews24': 'https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&auto=format&fit=crop&q=80'
 }
 
+@app.get("/api/share")
+def share_api_endpoint(request: Request, id: Optional[str] = Query(None), article_id: Optional[str] = Query(None)):
+    target = id or article_id or ""
+    ua = request.headers.get("user-agent", "")
+    return render_social_share_page(article_id=target, direct_link=None, user_agent=ua)
+
 @app.get("/api/article")
-def get_article(url: str = Query(...), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
+def get_article(request: Request, url: Optional[str] = Query(None), article_id: Optional[str] = Query(None), source_id: Optional[str] = Query(None), title_hint: Optional[str] = Query(None)):
+    if article_id and not url:
+        ua = request.headers.get("user-agent", "")
+        return render_social_share_page(article_id=article_id, direct_link=None, user_agent=ua)
+    if not url:
+        return JSONResponse(status_code=400, content={"error": "url or article_id required"})
     paras = []
     title = ""
     image = ""
@@ -1322,7 +1333,11 @@ def render_social_share_page(article_id: str, direct_link: Optional[str] = None,
 
 @app.get("/article/{article_id:path}")
 @app.get("/article")
+@app.get("/{article_id:path}")
 def direct_article_share_endpoint(request: Request, article_id: str = ""):
+    # If path is api or static file, don't intercept
+    if article_id.startswith("api/") or article_id.startswith("static/") or "." in article_id.split("/")[-1]:
+        return Response(status_code=404)
     try:
         user_agent = request.headers.get("user-agent", "")
         return render_social_share_page(article_id=article_id, direct_link=None, user_agent=user_agent)
