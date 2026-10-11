@@ -3196,13 +3196,14 @@
         let articleId = params.get('article');
         let articleLink = params.get('link');
 
-        // Also detect if path is /article/<id>
         if (!articleId && !articleLink && window.location.pathname.startsWith('/article/')) {
           const pathId = window.location.pathname.replace('/article/', '').trim();
           if (pathId) {
             articleId = decodeURIComponent(pathId);
           }
         }
+
+        if (!articleId && !articleLink) return;
 
         // If articleId is an fb_ self-contained token, unpack it immediately!
         if (articleId && articleId.startsWith('fb_')) {
@@ -3213,7 +3214,6 @@
             }).join(''));
             const data = JSON.parse(jsonStr);
             if (data && data.t) {
-              // Extract real id from data.l if present
               let realTargetId = '';
               if (data.l && data.l.indexOf('?article=') !== -1) {
                 realTargetId = decodeURIComponent(data.l.split('?article=')[1].split('&')[0]);
@@ -3221,7 +3221,6 @@
                 realTargetId = decodeURIComponent(data.l.split('/article/')[1].split('?')[0]);
               }
 
-              // Check if we can find this article in allNewsItems or custom articles first
               let existing = null;
               if (realTargetId) {
                 existing = allNewsItems.find(it => it.id === realTargetId || String(it.id).endsWith(realTargetId));
@@ -3255,21 +3254,40 @@
           }
         }
 
-        if (!articleId && !articleLink) return;
+        const target = decodeURIComponent(articleId || articleLink);
 
         function tryFindAndOpen() {
           let found = null;
-          if (articleId) {
-            const target = decodeURIComponent(articleId);
+
+          // 1. Check in allNewsItems
+          if (Array.isArray(allNewsItems)) {
             found = allNewsItems.find(it => {
               if (it.id === target || it.link === target) return true;
+              if (String(it.id).endsWith(target) || (target && target.endsWith(String(it.id)))) return true;
               if (generateSafeArticleSlug(it) === target) return true;
               return false;
             });
           }
-          if (!found && articleLink) {
-            const decLink = decodeURIComponent(articleLink);
-            found = allNewsItems.find(it => it.link === decLink || it.id === decLink || generateSafeArticleSlug(it) === decLink);
+
+          // 2. Check in admin custom articles (localStorage)
+          if (!found) {
+            const customList = getAdminCustomArticles();
+            if (Array.isArray(customList)) {
+              found = customList.find(it => {
+                if (it.id === target || it.link === target) return true;
+                if (String(it.id).endsWith(target) || (target && target.endsWith(String(it.id)))) return true;
+                return false;
+              });
+            }
+          }
+
+          // 3. Check in INITIAL_NEWS_DATA
+          if (!found && typeof INITIAL_NEWS_DATA !== 'undefined' && Array.isArray(INITIAL_NEWS_DATA)) {
+            found = INITIAL_NEWS_DATA.find(it => {
+              if (it.id === target || it.link === target) return true;
+              if (String(it.id).endsWith(target) || (target && target.endsWith(String(it.id)))) return true;
+              return false;
+            });
           }
 
           if (found) {
@@ -3280,28 +3298,41 @@
         }
 
         // Try immediately
-        if (!tryFindAndOpen()) {
-          setTimeout(tryFindAndOpen, 300);
-          setTimeout(tryFindAndOpen, 800);
-          setTimeout(tryFindAndOpen, 1600);
-          setTimeout(function() {
-            if (!tryFindAndOpen() && articleId) {
-              fetch('/api/article-meta/' + encodeURIComponent(articleId))
-                .then(r => r.json())
-                .then(art => {
-                  if (art && art.title) {
-                    openArticleModal(art);
-                  }
-                }).catch(() => {});
-            }
-          }, 2400);
-        }
+        if (tryFindAndOpen()) return;
+
+        // Try after small delays as feeds load
+        setTimeout(function() { if (!tryFindAndOpen()) setTimeout(tryFindAndOpen, 500); }, 200);
+
+        // Server API Fallback: If not found in memory, directly fetch full article from /api/article!
+        setTimeout(function() {
+          if (!isModalOpen) {
+            fetch('/api/article?article_id=' + encodeURIComponent(target) + '&url=' + encodeURIComponent(target))
+              .then(r => r.json())
+              .then(art => {
+                if (art && art.title) {
+                  const fallbackItem = {
+                    id: target,
+                    title: art.title,
+                    image: art.image || '',
+                    link: target.startsWith('http') ? target : ('https://newsbangla.vercel.app/?article=' + target),
+                    source_name: art.source_name || (target.startsWith('custom_') ? 'NewsBangla' : 'সংবাদ'),
+                    source_id: target.startsWith('custom_') ? 'newsbangla' : 'all',
+                    category: 'national',
+                    is_custom: target.startsWith('custom_') || target.startsWith('newsbangla_'),
+                    paragraphs: art.paragraphs || []
+                  };
+                  openArticleModal(fallbackItem);
+                }
+              })
+              .catch(err => console.warn('Server article lookup failed:', err));
+          }
+        }, 800);
+
       } catch (e) {
         console.warn('URL routing check error:', e);
       }
     }
 
-    
     function formatAdminTextBold() {
       const textarea = document.getElementById('adminArticleContent');
       if (!textarea) return;
