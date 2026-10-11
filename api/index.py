@@ -1403,20 +1403,41 @@ def share_image_proxy(url: str = Query(...)):
         # Fallback redirect to original URL
         return Response(status_code=302, headers={"Location": target_img_url})
 
-@app.get("/api/article-image/{article_id}")
+@app.get("/api/article-image/{article_id:path}")
 @app.get("/api/article-image")
 def serve_article_image(article_id: str = "", id: Optional[str] = Query(None)):
     import base64
     target_id = (article_id or id or "").strip()
     found_item = None
-    try:
-        admin_articles = read_persisted_admin_articles()
-        for a in admin_articles:
-            if a.get("id") == target_id or a.get("id") == f"custom_{target_id}" or str(a.get("id")).endswith(target_id):
-                found_item = a
-                break
-    except Exception:
-        pass
+    
+    # 1. Search in local files directly without relying on any network
+    for p in [
+        os.path.join(os.path.dirname(__file__), "admin_news.json"),
+        os.path.join(os.path.dirname(__file__), "..", "public", "admin_news.json"),
+        LOCAL_STATIC_FILE
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for a in data:
+                        if target_id and (a.get("id") == target_id or str(a.get("id")).endswith(target_id) or target_id in str(a.get("id"))):
+                            found_item = a
+                            break
+            except Exception:
+                pass
+        if found_item:
+            break
+
+    if not found_item:
+        try:
+            admin_articles = read_persisted_admin_articles()
+            for a in admin_articles:
+                if target_id and (a.get("id") == target_id or str(a.get("id")).endswith(target_id) or target_id in str(a.get("id"))):
+                    found_item = a
+                    break
+        except Exception:
+            pass
 
     if found_item and found_item.get("image"):
         img_str = found_item.get("image")
